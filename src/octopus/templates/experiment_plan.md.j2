@@ -6,26 +6,62 @@
 
 ## Goal
 
-Establish a reproducible baseline before exploring advanced models.
+Improve {{ main_metric }} for {{ project_goal or "the target ML task" }} while keeping every experiment comparable to the baseline.
 
-## Baseline Experiment
+## Baseline
 
-| Field | Value |
-|---|---|
-| Model | {{ baseline_models[0] }} |
-| Metric | {{ main_metric or metrics[0] }} |
-| Dataset | Full train set with stratified split |
-| Status | Not started |
+- Model: {{ baseline_models[0] }}
+- Metric: {{ main_metric }}
+- Dataset: frozen train / validation / test split
+- Status: not started
 
 ## Experiment Queue
 
-| ID | Model | Priority | Depends On | Status |
-|---|---|---|---|---|
-| E001 | {{ baseline_models[0] }} | High | - | Todo |
+### Experiment 1: Classical baseline
+
+- Model: {{ baseline_models[0] }}
+- Metric: {{ main_metric }}
+- Depends on: data split and label audit
+- Expected risk: weak representation but useful sanity check
+- Status: todo
+
 {% if baseline_models | length > 1 %}
-| E002 | {{ baseline_models[1] }} | High | E001 | Todo |
+### Experiment 2: Second classical baseline
+
+- Model: {{ baseline_models[1] }}
+- Metric: {{ main_metric }}
+- Depends on: Experiment 1
+- Expected risk: marginal gain without better data quality
+- Status: todo
+
 {% endif %}
-| E003 | _Main model TBD_ | Medium | E001 | Todo |
+### Experiment 3: Candidate model
+
+- Model: {{ model_candidates[0] }}
+{% if task_type == "text_classification" %}
+- Batch size: {{ 16 if compute.has_gpu else 8 }}
+- Learning rate: 2e-5
+- Epochs: 3
+{% endif %}
+- Depends on: baseline result
+- Expected risk: overfitting if data is small or noisy
+- Status: todo
+
+{% if has_class_imbalance %}
+### Experiment 4: Class imbalance handling
+
+- Change: add class weights or balanced sampler
+- Compare: minority recall and {{ main_metric }}
+- Depends on: Experiment 3
+- Expected risk: higher recall with lower precision
+- Status: todo
+
+{% endif %}
+## First Experiments Checklist
+
+{% for item in first_experiments %}
+- {{ item }}
+{% endfor %}
 
 ## Metrics to Track
 
@@ -41,7 +77,7 @@ Establish a reproducible baseline before exploring advanced models.
 {
   "experiment_id": "E001",
   "model": "{{ baseline_models[0] }}",
-  "{{ main_metric or metrics[0] }}": null,
+  "{{ main_metric }}": null,
   "train_time_sec": null,
   "notes": ""
 }
@@ -50,10 +86,12 @@ Establish a reproducible baseline before exploring advanced models.
 ## Stop Condition
 
 - Reached target score: {{ target_score or "not set" }}
-- Or exhausted compute budget
+- Stop if {{ main_metric }} does not improve after 3 controlled experiments.
+- Stop if data quality issues invalidate the evaluation split.
+- Stop if compute budget is exhausted.
 
 ## Next Decision Rules
 
-- If baseline {{ main_metric or metrics[0] }} is below expected, check data quality first.
-- If baseline {{ main_metric or metrics[0] }} meets expectations, move to E003.
+- If baseline {{ main_metric }} is below expected, check data quality first.
+- If baseline {{ main_metric }} meets expectations, move to candidate model training.
 - Always document why an experiment was stopped or skipped.

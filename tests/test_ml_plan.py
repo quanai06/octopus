@@ -57,3 +57,32 @@ def test_ml_plan_generates_both_files(tmp_project):
 
     assert Path("ml_design.md").exists()
     assert Path("experiment_plan.md").exists()
+
+
+def test_ml_plan_generates_phase_2_artifacts(tmp_project):
+    write_state()
+    generate_ml_plan(force=True)
+
+    assert Path("data_strategy.md").exists()
+    assert Path("compute_budget.md").exists()
+
+
+def test_ml_plan_vietnamese_text_classification_candidates(tmp_project):
+    write_state(
+        sample_ml_state(
+            project_goal="Train model phân loại cảm xúc tiếng Việt bằng PhoBERT.",
+            task_type="text_classification",
+            main_metric="macro_f1",
+        )
+    )
+    generate_ml_plan(force=True)
+
+    ml_design = Path("ml_design.md").read_text(encoding="utf-8")
+    experiment_plan = Path("experiment_plan.md").read_text(encoding="utf-8")
+
+    assert "supervised_classification" in ml_design
+    assert "Vietnamese" in ml_design
+    assert "vinai/phobert-base" in ml_design
+    assert "per-class recall" in ml_design
+    assert "Experiment 3: Candidate model" in experiment_plan
+    assert "Stop if macro_f1 does not improve after 3 controlled experiments." in experiment_plan

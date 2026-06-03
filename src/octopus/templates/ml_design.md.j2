@@ -6,15 +6,34 @@
 
 ## Problem Framing
 
+- **Problem type:** {{ problem_type }}
 - **Task type:** {{ task_type or "to be defined" }}
+- **Language:** {{ language or "not specified" }}
 - **Input:** {{ input_type or "to be defined" }}
 - **Output:** {{ output_type or "to be defined" }}
+- **Primary metric:** {{ main_metric }}
+{% if secondary_metrics %}
+- **Secondary metrics:** {{ secondary_metrics | join(", ") }}
+{% endif %}
 
 ## Dataset Strategy
 
 - **Status:** {{ dataset_status or "unknown" }}
+{% if dataset_size_note %}
+- **Size note:** {{ dataset_size_note }}
+{% endif %}
+{% if has_labels is not none %}
+- **Labels:** {{ "available" if has_labels else "not available" }}
+{% endif %}
 {% if has_class_imbalance %}
 - Warning: class imbalance detected - consider oversampling, class weights, or stratified split.
+{% endif %}
+{% if data_checks %}
+
+Recommended checks:
+{% for check in data_checks %}
+- {{ check }}
+{% endfor %}
 {% endif %}
 
 ## Baseline Models
@@ -25,7 +44,9 @@
 
 ## Candidate Models
 
-_To be filled after baseline is established._
+{% for model in model_candidates %}
+- {{ model }}
+{% endfor %}
 
 ## Evaluation Metrics
 
@@ -37,10 +58,18 @@ _To be filled after baseline is established._
 
 - Always train baseline before main model.
 - Log every experiment result, even failed ones.
+- Run one controlled change per experiment.
 {% if compute.has_gpu %}
 - GPU available: {{ compute.environment or "environment not specified" }}.
 {% else %}
 - No GPU detected - limit model size accordingly.
+{% endif %}
+{% if training_checklist %}
+
+Checklist:
+{% for item in training_checklist %}
+- {{ item }}
+{% endfor %}
 {% endif %}
 
 ## Known Risks
@@ -51,11 +80,9 @@ _To be filled after baseline is established._
 
 ## Compute Budget
 
-{% if compute.budget_note %}
-{{ compute.budget_note }}
-{% else %}
-_Not specified._
-{% endif %}
+{% for note in compute_budget_notes %}
+- {{ note }}
+{% endfor %}
 
 ## Recommended First Experiment
 

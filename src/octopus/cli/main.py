@@ -4,6 +4,7 @@ import typer
 
 from octopus.cli.commands.ask import ask_requirements
 from octopus.cli.commands.context import build_current_context
+from octopus.cli.commands.exp import app as exp_app
 from octopus.cli.commands.init import init_project
 from octopus.cli.commands.ml_plan import generate_ml_plan
 from octopus.cli.commands.plan import generate_plan
@@ -12,6 +13,7 @@ from octopus.cli.commands.sync import sync_runtime
 from octopus.cli.commands.tasks import generate_tasks
 
 app = typer.Typer(help="Octopus CLI project brain for ML/DL planning.")
+app.add_typer(exp_app, name="exp")
 
 
 @app.command("init")
@@ -50,8 +52,29 @@ def context_cmd(
         str | None, typer.Argument(help="Use 'inspect' to print context.")
     ] = None,
     task: Annotated[str | None, typer.Option("--task", help="Current task description.")] = None,
+    profile: Annotated[
+        str,
+        typer.Option(
+            "--profile",
+            help="Context profile: planning, training, debugging, or review.",
+        ),
+    ] = "training",
+    budget: Annotated[
+        int,
+        typer.Option("--budget", help="Soft token budget for selected context sections."),
+    ] = 6000,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Include all planning sections."),
+    ] = False,
 ) -> None:
-    build_current_context(task=task, inspect_arg=inspect_arg)
+    build_current_context(
+        task=task,
+        inspect_arg=inspect_arg,
+        profile=profile,
+        budget=budget,
+        full=full,
+    )
 
 
 @app.command("sync")

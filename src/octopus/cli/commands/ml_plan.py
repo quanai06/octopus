@@ -16,6 +16,8 @@ def generate_ml_plan(force: bool = False) -> None:
         console.print("[yellow]Task type not recognized. Generic template used.[/yellow]")
     console.print("[green]ml_design.md generated.[/green]")
     console.print("[green]experiment_plan.md generated.[/green]\n")
+    console.print("[green]data_strategy.md generated.[/green]")
+    console.print("[green]compute_budget.md generated.[/green]\n")
     console.print(f"  Task:     {state.task_type or 'generic'}")
     console.print(f"  Baseline: {rules.baseline_models[0]}")
     console.print(f"  Metric:   {state.main_metric or rules.metrics[0]}")

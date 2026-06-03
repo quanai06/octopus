@@ -8,7 +8,17 @@ def test_help_lists_phase_1_commands():
     result = CliRunner().invoke(app, ["--help"])
 
     assert result.exit_code == 0
-    for command in ["init", "ask", "plan", "ml-plan", "tasks", "context", "sync", "status"]:
+    for command in [
+        "init",
+        "ask",
+        "plan",
+        "ml-plan",
+        "tasks",
+        "context",
+        "sync",
+        "status",
+        "exp",
+    ]:
         assert command in result.output
 
 

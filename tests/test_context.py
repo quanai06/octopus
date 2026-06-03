@@ -73,3 +73,34 @@ def test_context_includes_task_name(tmp_project):
     build_context(state, "train TF-IDF baseline")
 
     assert "train TF-IDF baseline" in CURRENT_CONTEXT.read_text(encoding="utf-8")
+
+
+def test_context_uses_training_profile_sections(tmp_project):
+    state = _write_plan_files()
+    content, result = build_context(state, "train PhoBERT baseline", profile="training")
+
+    assert result.profile == "training"
+    assert "Selected Planning Context" in content
+    assert any("experiment_plan.md#" in section for section in result.included_sections)
+    assert "Functional Requirements" not in content
+
+
+def test_context_full_includes_review_sections(tmp_project):
+    state = _write_plan_files()
+    content, result = build_context(state, "review project", full=True)
+
+    assert result.profile == "full"
+    assert "requirements.md#Functional Requirements" in result.included_sections
+    assert "## Functional Requirements" in content
+
+
+def test_context_budget_skips_low_priority_sections(tmp_project):
+    state = _write_plan_files()
+    _, result = build_context(
+        state,
+        "train TF-IDF baseline",
+        profile="training",
+        token_budget=200,
+    )
+
+    assert result.skipped_sections
