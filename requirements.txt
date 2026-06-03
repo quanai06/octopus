@@ -1,0 +1,14 @@
+typer>=0.12
+rich>=13
+questionary>=2.0
+pydantic>=2
+PyYAML>=6
+Jinja2>=3
+tiktoken>=0.7
+pathspec>=0.12
+
+# Development and tests
+pytest
+pytest-mock
+ruff
+mypy
