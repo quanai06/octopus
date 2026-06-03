@@ -73,14 +73,14 @@ Improve {{ main_metric }} for {{ project_goal or "the target ML task" }} while k
 
 ## Logging Format
 
-```json
-{
-  "experiment_id": "E001",
-  "model": "{{ baseline_models[0] }}",
-  "{{ main_metric }}": null,
-  "train_time_sec": null,
-  "notes": ""
-}
+```yaml
+experiment_id: E001
+model: "{{ baseline_models[0] }}"
+metric:
+  name: "{{ main_metric }}"
+  value: null
+train_time_sec: null
+notes: ""
 ```
 
 ## Stop Condition
