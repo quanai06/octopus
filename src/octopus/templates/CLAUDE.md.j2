@@ -1,0 +1,43 @@
+# Claude Instructions - {{ project_name or "Unnamed Project" }}
+
+This project uses **Octopus CLI** for planning and context management.
+
+---
+
+## Before Starting Any Task
+
+1. Read `requirements.md` - understand the goal and constraints.
+2. Read `tasks.md` - find the current active task.
+3. Read `.octopus/context/current_context.md` - this is your working context.
+{% if project_type in ["ml", "dl", "rag"] %}
+4. Read `ml_design.md` and `experiment_plan.md` - understand the ML strategy.
+{% endif %}
+
+## Rules
+
+- **Do not** train a model without checking `experiment_plan.md` first.
+- **Do not** change architecture without creating an ADR in `.octopus/adr/`.
+- **Do not** load raw datasets or checkpoint files into context.
+- **Do not** implement a new experiment before baseline is logged.
+- After completing a task, update its status in `tasks.md`.
+{% if project_type in ["ml", "dl"] %}
+- Log all experiment metrics into `.octopus/experiments/` in JSON format.
+{% endif %}
+
+## Context File
+
+Your primary working context is:
+
+```text
+.octopus/context/current_context.md
+```
+
+If you need more context, ask the user to run:
+
+```bash
+octopus context --task "<task description>"
+```
+
+## Runtime
+
+Generated for: **Claude Code**

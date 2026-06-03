@@ -1,0 +1,32 @@
+# Agent Instructions - {{ project_name or "Unnamed Project" }}
+
+This project uses **Octopus CLI** for planning and context management.
+
+---
+
+## Before Coding
+
+1. Read `requirements.md`.
+2. Read `tasks.md` - identify the current active task.
+3. Read `.octopus/context/current_context.md`.
+{% if project_type in ["ml", "dl", "rag"] %}
+4. Read `ml_design.md` and `experiment_plan.md`.
+{% endif %}
+
+## Development Rules
+
+- Follow the current task context strictly.
+- Keep changes minimal and task-focused.
+- Do not introduce a new architecture without an ADR.
+- Do not run training before a baseline and metric are defined.
+- Update task status in `tasks.md` after implementation.
+
+## Context Refresh
+
+```bash
+octopus context --task "<task description>"
+```
+
+## Runtime
+
+Generated for: **Codex / OpenAI Agents**

@@ -1,0 +1,47 @@
+[project]
+name = "cli-octopus"
+version = "0.1.0"
+description = "A CLI project brain for ML/DL engineers: plan experiments, compress context, and prepare Claude/Codex-ready project instructions before training or coding."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13",
+    "questionary>=2.0",
+    "pydantic>=2",
+    "pyyaml>=6",
+    "jinja2>=3",
+    "tiktoken>=0.7",
+    "pathspec>=0.12",
+]
+
+[project.scripts]
+octopus = "octopus.cli.main:app"
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+octopus = ["templates/*.j2"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-mock",
+    "ruff",
+    "mypy",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
