@@ -69,6 +69,14 @@ def context_cmd(
         bool,
         typer.Option("--full", help="Include all planning sections."),
     ] = False,
+    direction: Annotated[
+        str | None,
+        typer.Option("--direction", help="Build context for a selected experiment direction."),
+    ] = None,
+    target: Annotated[
+        str,
+        typer.Option("--target", help="Agent target for direction context: codex or claude."),
+    ] = "codex",
 ) -> None:
     build_current_context(
         task=task,
@@ -76,6 +84,8 @@ def context_cmd(
         profile=profile,
         budget=budget,
         full=full,
+        direction=direction,
+        target=target,
     )
 
 

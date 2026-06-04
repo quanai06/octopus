@@ -39,6 +39,21 @@ If you need more context, ask the user to run:
 octopus context --task "<task description>"
 ```
 
+## Octopus Training Loop
+
+Before editing training code:
+
+1. Read `.octopus/context/current_context.md`.
+2. Read `.octopus/plans/selected_direction.yaml` if it exists.
+3. Implement only the selected direction.
+4. Do not implement multiple directions at once.
+5. Do not change dataset split unless the selected direction explicitly says so.
+6. Do not tune on the test set.
+7. After a new run, ask the user to run or run:
+   `octopus exp ingest --run-dir <run_dir>`
+8. Do not edit `.octopus/tasks.json` manually.
+9. Do not edit `.octopus/experiments/*.yaml` manually unless the user explicitly asks.
+
 ## Runtime
 
 Generated for: **Claude Code**

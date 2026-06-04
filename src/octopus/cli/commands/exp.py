@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Literal, cast
 
 import typer
@@ -7,13 +8,21 @@ from rich.table import Table
 
 from octopus.core.files import atomic_write_text
 from octopus.core.guards import require_init
-from octopus.core.paths import EXPERIMENT_REPORT_MD, TASKS_MD
+from octopus.core.paths import EXPERIMENT_REPORT_MD, NEXT_STEPS_MD, TASKS_MD
 from octopus.core.schemas import ExperimentRecord
 from octopus.core.workflow import (
     has_completed_baseline,
     infer_experiment_kind,
     requires_baseline_gate,
 )
+from octopus.experiments.analyze import analyze_experiment
+from octopus.experiments.ingest import ingest_run_dir
+from octopus.experiments.next_planner import (
+    generate_next_directions,
+    write_next_steps_markdown,
+    write_next_steps_yaml,
+)
+from octopus.experiments.selection import choose_direction
 from octopus.planners.experiment_advisor import (
     diagnose_experiment,
     suggest_for_experiment,
@@ -25,7 +34,7 @@ from octopus.storage.experiment_store import (
     initialize_experiment_tracking,
     latest_experiment,
     list_experiments,
-    next_experiment_id,
+    next_legacy_experiment_id,
     save_experiment,
 )
 from octopus.storage.state_store import load_state, state_exists
@@ -100,7 +109,7 @@ def log_experiment(
     metrics = _parse_metrics(metric or [])
     notes = _parse_notes(note)
     record = ExperimentRecord(
-        id=next_experiment_id(),
+        id=next_legacy_experiment_id(),
         name=name,
         kind=kind_value,
         model=model,
@@ -277,6 +286,139 @@ def write_experiment_report() -> None:
     console.print(f"  Output: {EXPERIMENT_REPORT_MD.as_posix()}")
 
 
+@app.command("ingest")
+def ingest_experiment(
+    run_dir: Annotated[
+        Path | None,
+        typer.Option("--run-dir", help="Training run directory containing artifacts."),
+    ] = None,
+    metrics: Annotated[
+        Path | None,
+        typer.Option("--metrics", help="Path to metrics.json."),
+    ] = None,
+    report: Annotated[
+        Path | None,
+        typer.Option("--report", help="Path to classification_report.json."),
+    ] = None,
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to config.yaml/config.yml."),
+    ] = None,
+    name: Annotated[str | None, typer.Option("--name", help="Experiment name.")] = None,
+    kind: Annotated[
+        str | None,
+        typer.Option("--kind", help="Experiment kind: baseline, candidate, main, ablation, debug."),
+    ] = None,
+    model: Annotated[str | None, typer.Option("--model", help="Model name.")] = None,
+    dataset: Annotated[str | None, typer.Option("--dataset", help="Dataset name.")] = None,
+    note: Annotated[
+        list[str] | None,
+        typer.Option("--note", help="Experiment note. Can be repeated."),
+    ] = None,
+    tag: Annotated[
+        list[str] | None,
+        typer.Option("--tag", help="Experiment tag. Can be repeated."),
+    ] = None,
+) -> None:
+    require_init()
+    if run_dir is None and metrics is None and report is None:
+        console.print("[red]Provide --run-dir, --metrics, or --report.[/red]")
+        raise typer.Exit(1)
+    try:
+        record = ingest_run_dir(
+            run_dir or Path("."),
+            metrics_path=metrics,
+            report_path=report,
+            config_path=config,
+            name=name,
+            kind=kind,
+            model=model,
+            dataset=dataset,
+            notes=note or [],
+            tags=tag or [],
+        )
+    except (FileExistsError, FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]Experiment ingest failed: {exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    main_metric = _default_metric([record])
+    console.print(f"[green]Experiment ingested: {record.id}[/green]")
+    console.print(f"Name: {record.name}")
+    console.print(f"Kind: {record.kind}")
+    if main_metric in record.metrics:
+        console.print(f"Main metric: {main_metric} = {record.metrics[main_metric]:.3f}")
+    console.print("Artifacts:")
+    if record.artifacts.metrics_path:
+        console.print(f"  metrics: {record.artifacts.metrics_path}")
+    if record.artifacts.report_path:
+        console.print(f"  report: {record.artifacts.report_path}")
+    if record.artifacts.config_path:
+        console.print(f"  config: {record.artifacts.config_path}")
+    console.print("Next:")
+    console.print(f"  octopus exp analyze {record.id}")
+
+
+@app.command("analyze")
+def analyze_ingested_experiment(
+    experiment_id: Annotated[str, typer.Argument(help="Experiment ID, for example E003.")]
+) -> None:
+    require_init()
+    try:
+        diagnosis = analyze_experiment(experiment_id)
+    except FileNotFoundError as exc:
+        console.print(f"[red]Experiment not found: {exc.filename}[/red]")
+        raise typer.Exit(1) from exc
+    console.print(f"[green]Training review generated for {diagnosis.experiment_id}.[/green]")
+    metric_value = _optional_float(diagnosis.main_metric_value)
+    console.print(f"Main metric: {diagnosis.main_metric} = {metric_value}")
+    console.print(f"Summary: {diagnosis.summary}")
+    if diagnosis.recommended_focus:
+        console.print("Recommended focus:")
+        for item in diagnosis.recommended_focus:
+            console.print(f"  - {item}")
+
+
+@app.command("next")
+def plan_next_experiments(
+    top_k: Annotated[
+        int | None,
+        typer.Option("--top-k", help="Limit the number of generated directions."),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", help="Markdown output path."),
+    ] = None,
+) -> None:
+    require_init()
+    directions = generate_next_directions(top_k=top_k)
+    yaml_path = write_next_steps_yaml(directions)
+    markdown_path = write_next_steps_markdown(directions, output=output or NEXT_STEPS_MD)
+    console.print("[green]Next experiment directions generated.[/green]\n")
+    console.print(f"  YAML:     {yaml_path.as_posix()}")
+    console.print(f"  Markdown: {markdown_path.as_posix()}")
+    recommended = next((item for item in directions if item.recommendation == "recommended"), None)
+    if recommended:
+        console.print(f"\nRecommended: {recommended.direction_id} - {recommended.title}")
+        console.print(f"Choose with: octopus exp choose {recommended.direction_id}")
+
+
+@app.command("choose")
+def choose_next_direction(
+    direction_id: Annotated[str, typer.Argument(help="Direction ID from next_steps.yaml.")]
+) -> None:
+    require_init()
+    try:
+        selected = choose_direction(direction_id)
+    except (FileNotFoundError, KeyError) as exc:
+        console.print(f"[red]Direction not found: {exc}[/red]")
+        console.print("Run: octopus exp next")
+        raise typer.Exit(1) from exc
+    console.print("[green]Direction selected.[/green]\n")
+    console.print(f"  Direction: {selected.selected_direction_id}")
+    console.print(f"  Output:    {selected.source_plan}")
+    console.print(f"  Context:   octopus context --direction {selected.selected_direction_id}")
+
+
 def _parse_metrics(values: list[str]) -> dict[str, float]:
     metrics: dict[str, float] = {}
     for value in values:
@@ -347,6 +489,10 @@ def _metric_value(metrics: dict[str, float], key: str) -> str:
     if key not in metrics:
         return "-"
     return f"{metrics[key]:g}"
+
+
+def _optional_float(value: float | None) -> str:
+    return "not available" if value is None else f"{value:g}"
 
 
 def _comparison_warnings(records: list[ExperimentRecord]) -> list[str]:

@@ -29,6 +29,26 @@ This project uses **Octopus CLI** for planning and context management.
 octopus context --task "<task description>"
 ```
 
+## Octopus Instructions for Codex
+
+Before editing ML/DL/RAG training code:
+
+1. Read `.octopus/context/current_context.md`.
+2. Follow the selected direction only.
+3. Read `.octopus/plans/selected_direction.yaml` if it exists.
+4. Use `.octopus/plans/next_steps.md` as planning background.
+5. Use `.octopus/memory/experiments.md` to avoid repeating failed directions.
+6. Do not read raw data, checkpoints, secrets, or large logs unless explicitly requested.
+7. Do not change validation/test split without an explicit selected direction.
+8. Run tests when possible.
+9. Keep the patch focused.
+
+After a new run, ingest it with:
+
+```bash
+octopus exp ingest --run-dir <run_dir>
+```
+
 ## Runtime
 
 Generated for: **Codex / OpenAI Agents**

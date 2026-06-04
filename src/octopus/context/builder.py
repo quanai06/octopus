@@ -12,15 +12,20 @@ from octopus.context.profiles import (
 from octopus.context.token_estimator import estimate_tokens, get_token_status
 from octopus.core.files import atomic_write_text
 from octopus.core.paths import (
+    BEST_RUNS_MD,
     COMPUTE_BUDGET_MD,
     CURRENT_CONTEXT,
     DATA_STRATEGY_MD,
     EXPERIMENT_MD,
+    EXPERIMENT_MEMORY_MD,
     ML_DESIGN_MD,
+    NEXT_STEPS_MD,
     REQUIREMENTS_MD,
+    SELECTED_DIRECTION_YAML,
     TASKS_MD,
 )
-from octopus.core.schemas import ContextBuildResult, ProjectState
+from octopus.core.schemas import ContextBuildResult, NextDirection, ProjectState
+from octopus.experiments.selection import get_direction
 
 PLAN_SECTIONS = [
     ("Requirements Summary", REQUIREMENTS_MD),
@@ -52,6 +57,22 @@ GENERATED_CONTEXT_FILES = {
     COMPUTE_BUDGET_MD.as_posix(),
     TASKS_MD.as_posix(),
     CURRENT_CONTEXT.as_posix(),
+}
+DIRECTION_KEYWORDS = {
+    "class_imbalance": [
+        "loss",
+        "class_weight",
+        "sampler",
+        "weighted",
+        "dataset",
+        "collate",
+        "label",
+        "metrics",
+    ],
+    "augmentation": ["augment", "preprocess", "transform", "dataset", "tokenizer"],
+    "metric": ["evaluate", "metrics", "classification_report", "confusion", "score"],
+    "learning_rate": ["optimizer", "scheduler", "lr", "warmup", "config", "train"],
+    "rag_retrieval": ["retriever", "embedding", "chunk", "index", "vector", "bm25", "qdrant"],
 }
 
 
@@ -370,3 +391,234 @@ def build_context(
     if write:
         atomic_write_text(CURRENT_CONTEXT, content)
     return content, result
+
+
+def build_direction_context(
+    state: ProjectState,
+    direction_id: str,
+    *,
+    target: str = "codex",
+    token_budget: int = DEFAULT_TOKEN_BUDGET,
+    write: bool = True,
+) -> tuple[str, ContextBuildResult]:
+    direction = get_direction(direction_id)
+    task = f"{direction.direction_id}: {direction.title}"
+    planning_blocks = _direction_planning_blocks()
+    current_content = "\n\n".join(planning_blocks)
+    code_blocks, included_code_files, skipped_code_files = _select_direction_code_files(
+        direction,
+        token_budget=token_budget,
+        current_content=current_content,
+    )
+    included_files = [
+        path.as_posix()
+        for path in (SELECTED_DIRECTION_YAML, NEXT_STEPS_MD, EXPERIMENT_MEMORY_MD, BEST_RUNS_MD)
+        if path.exists()
+    ]
+    included_files.extend(included_code_files)
+    body = [
+        "# Octopus Current Context",
+        "",
+        f"> Generated: {datetime.now(UTC).isoformat(timespec='seconds')}",
+        f"> Target: {target}",
+        f"> Direction: {direction.direction_id}",
+        "> Estimated tokens: pending",
+        "",
+        "## 1. Current Task",
+        "",
+        f"Implement only the selected direction: {direction.title}.",
+        "",
+        "## 2. Selected Direction",
+        "",
+        f"- ID: {direction.direction_id}",
+        f"- Title: {direction.title}",
+        f"- Recommendation: {direction.recommendation}",
+        f"- Confidence: {direction.confidence}",
+        f"- Risk: {direction.risk}",
+        f"- Cost: {direction.cost}",
+        f"- Expected impact: {direction.expected_impact or 'not specified'}",
+        "",
+        direction.rationale,
+        "",
+        "## 3. Evidence",
+        "",
+        *_bullet_list(direction.evidence),
+        "",
+        "## 4. Files to Read",
+        "",
+        *_path_bullets(direction.files_to_read),
+        "",
+        "## 5. Likely Files to Edit",
+        "",
+        *_path_bullets(direction.files_to_edit),
+        "",
+        "## 6. Files to Avoid",
+        "",
+        *_path_bullets(
+            direction.files_to_avoid
+            or [
+                "data/",
+                "datasets/",
+                "checkpoints/",
+                "wandb/",
+                "mlruns/",
+                ".env",
+                "secrets.yaml",
+            ]
+        ),
+        "",
+        "## 7. Commands to Run",
+        "",
+        "```bash",
+        *(direction.commands_to_run or ["pytest -q"]),
+        "```",
+        "",
+        "## 8. Guardrails",
+        "",
+        *_bullet_list(direction.guardrails),
+        "- Do not read or copy raw data rows, secrets, checkpoints, or large logs into context.",
+        "- Do not implement multiple directions at once.",
+        "",
+        "## 9. Definition of Done",
+        "",
+        f"- Complete selected direction `{direction.direction_id}` only.",
+        "- Add or update tests when applicable.",
+        "- Run the listed commands when possible.",
+        f"- Stop condition: {direction.stop_condition or 'one controlled experiment is ready.'}",
+        "- Ingest the next run with `octopus exp ingest --run-dir <new_run_dir>`.",
+        "",
+        "## 10. Relevant Planning Context",
+        "",
+        *planning_blocks,
+        "",
+        "## 11. Relevant Code Context",
+        "",
+        *(code_blocks or ["_No matching code files found._"]),
+        "",
+    ]
+    content = "\n".join(body)
+    token_count = estimate_tokens(content)
+    content = content.replace("> Estimated tokens: pending", f"> Estimated tokens: {token_count}")
+    token_status = get_token_status(token_count)
+    if token_count > token_budget:
+        token_status = "over_budget"
+
+    _, excluded_files, excluded_patterns = scan_project_files()
+    result = ContextBuildResult(
+        task=task,
+        profile=f"direction:{target}",
+        output_path=CURRENT_CONTEXT.as_posix(),
+        estimated_tokens=token_count,
+        token_status=token_status,
+        included_files=included_files,
+        included_sections=[],
+        skipped_sections=skipped_code_files,
+        excluded_files=excluded_files,
+        excluded_patterns=excluded_patterns,
+    )
+    if write:
+        atomic_write_text(CURRENT_CONTEXT, content)
+    return content, result
+
+
+def _direction_planning_blocks() -> list[str]:
+    blocks: list[str] = []
+    for path in (SELECTED_DIRECTION_YAML, NEXT_STEPS_MD, EXPERIMENT_MEMORY_MD, BEST_RUNS_MD):
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore").strip()
+        if not text:
+            continue
+        language = "yaml" if path.suffix in {".yaml", ".yml"} else "markdown"
+        blocks.append(
+            f"<!-- source: {path.as_posix()} -->\n"
+            f"### {path.as_posix()}\n\n"
+            f"```{language}\n{text[:6_000]}\n```"
+        )
+    return blocks or ["_No Phase 2.5 planning files found. Run `octopus exp next` first._"]
+
+
+def _select_direction_code_files(
+    direction: NextDirection,
+    *,
+    token_budget: int,
+    current_content: str,
+) -> tuple[list[str], list[str], list[str]]:
+    included, _, _ = scan_project_files()
+    keywords = _direction_keywords(direction)
+    candidates: list[tuple[int, Path, str]] = []
+    for rel in included:
+        if rel in GENERATED_CONTEXT_FILES or rel.startswith(".octopus/"):
+            continue
+        path = Path(rel)
+        if path.suffix.lower() not in CODE_EXTENSIONS:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        score = _direction_file_score(path, text, keywords, direction)
+        if score > 0:
+            candidates.append((score, path, text))
+    candidates.sort(key=lambda item: (-item[0], item[1].as_posix()))
+
+    blocks: list[str] = []
+    files: list[str] = []
+    skipped: list[str] = []
+    running = current_content
+    for _, path, _ in candidates[:12]:
+        snippet = _snippet_for_file(path, direction.title)
+        if not snippet:
+            continue
+        block = _format_code_file(path, snippet)
+        if estimate_tokens(f"{running}\n\n{block}") > token_budget:
+            skipped.append(f"{path.as_posix()} (budget)")
+            continue
+        blocks.append(block)
+        files.append(path.as_posix())
+        running = f"{running}\n\n{block}"
+        if len(files) >= 6:
+            break
+    return blocks, files, skipped
+
+
+def _direction_keywords(direction: NextDirection) -> set[str]:
+    text = " ".join(
+        [
+            direction.title,
+            direction.rationale,
+            " ".join(direction.files_to_read),
+            " ".join(direction.files_to_edit),
+        ]
+    ).lower()
+    keywords = set(_task_words(text))
+    for group, values in DIRECTION_KEYWORDS.items():
+        if group in text or any(value in text for value in values):
+            keywords.update(values)
+    return {keyword for keyword in keywords if len(keyword) >= 2}
+
+
+def _direction_file_score(
+    path: Path, text: str, keywords: set[str], direction: NextDirection
+) -> int:
+    rel = path.as_posix().lower()
+    haystack = text[:8_000].lower()
+    score = 0
+    for keyword in keywords:
+        if keyword in rel:
+            score += 8
+        if keyword in haystack:
+            score += 3
+    for explicit in [*direction.files_to_read, *direction.files_to_edit]:
+        normalized = explicit.lower()
+        if normalized and normalized in rel:
+            score += 10
+    return score
+
+
+def _bullet_list(items: list[str]) -> list[str]:
+    return [f"- {item}" for item in items] if items else ["- None."]
+
+
+def _path_bullets(items: list[str]) -> list[str]:
+    return [f"- `{item}`" for item in items] if items else ["- None."]

@@ -12,6 +12,7 @@ DEFAULT_EXCLUDED_PATTERNS = [
     "*.pt",
     "*.pth",
     "*.ckpt",
+    "*.safetensors",
     "*.onnx",
     "*.pkl",
     "*.joblib",
@@ -25,6 +26,10 @@ DEFAULT_EXCLUDED_PATTERNS = [
     "checkpoints/",
     "data/",
     "datasets/",
+    ".env",
+    "secrets.yaml",
+    "id_rsa",
+    "kaggle.json",
 ]
 
 

@@ -1,6 +1,6 @@
 from rich.console import Console
 
-from octopus.context.builder import build_context
+from octopus.context.builder import build_context, build_direction_context
 from octopus.context.profiles import normalize_profile
 from octopus.context.token_estimator import format_token_display
 from octopus.core.guards import require_plan_files, require_state
@@ -16,14 +16,38 @@ def build_current_context(
     profile: str = "training",
     budget: int = 6000,
     full: bool = False,
+    direction: str | None = None,
+    target: str = "codex",
 ) -> None:
     require_state()
-    require_plan_files()
     inspect = inspect_arg == "inspect"
     if inspect_arg and not inspect:
         console.print("[red]Unknown context action.[/red]")
         console.print("Use: octopus context inspect")
         raise SystemExit(1)
+    if direction:
+        if budget <= 0:
+            console.print("[red]Budget must be greater than zero.[/red]")
+            raise SystemExit(1)
+        try:
+            content, result = build_direction_context(
+                load_state(),
+                direction,
+                target=target,
+                token_budget=budget,
+                write=not inspect,
+            )
+        except (FileNotFoundError, KeyError) as exc:
+            console.print(f"[red]Direction context unavailable: {exc}[/red]")
+            console.print("Run: octopus exp next")
+            raise SystemExit(1) from exc
+        if inspect:
+            console.print(content)
+            return
+        _print_context_result(result)
+        return
+
+    require_plan_files()
     try:
         context_profile = normalize_profile(profile)
     except ValueError as exc:
@@ -46,6 +70,10 @@ def build_current_context(
         console.print(content)
         return
 
+    _print_context_result(result)
+
+
+def _print_context_result(result) -> None:
     console.print("[green]Context built.[/green]\n")
     console.print(f"  Task:    {result.task}")
     console.print(f"  Profile: {result.profile}")
