@@ -31,7 +31,7 @@ from octopus.storage.experiment_store import (
 from octopus.storage.state_store import load_state, state_exists
 from octopus.storage.task_store import ensure_tasks, mark_baseline_tasks_done, render_tasks_markdown
 
-app = typer.Typer(help="Log and inspect ML experiments.")
+app = typer.Typer(help="Log and inspect machine learning experiments.")
 console = Console()
 ExperimentStatus = Literal["planned", "running", "completed", "failed", "skipped"]
 ExperimentKind = Literal["baseline", "candidate", "main", "other"]

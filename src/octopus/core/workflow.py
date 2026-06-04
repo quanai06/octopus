@@ -53,4 +53,8 @@ def has_completed_baseline() -> bool:
 
 
 def requires_baseline_gate(state: ProjectState) -> bool:
-    return state.baseline_required and state.project_type in {"ml", "dl", "rag"}
+    return state.baseline_required and state.project_type in {
+        "machine learning",
+        "deep learning",
+        "rag",
+    }

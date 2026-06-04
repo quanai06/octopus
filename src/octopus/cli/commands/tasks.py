@@ -11,8 +11,8 @@ console = Console()
 def generate_tasks(force: bool = False) -> None:
     require_complete_state()
     state = load_state()
-    if state.project_type in {"ml", "dl", "rag"} and not state.task_type:
-        console.print("[red]ML task_type is required.[/red]")
+    if state.project_type in {"machine learning", "deep learning", "rag"} and not state.task_type:
+        console.print("[red]Machine learning task_type is required.[/red]")
         console.print("Run: [bold]octopus ask[/bold]")
         raise SystemExit(1)
     render_tasks(state, backup=not force)

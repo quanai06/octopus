@@ -6,8 +6,8 @@ def sample_ml_state(**updates):
     data = {
         "project_name": "Vietnamese Emotion Classifier",
         "project_goal": "Classify Vietnamese social posts by emotion.",
-        "target_users": "ML engineers",
-        "project_type": "ml",
+        "target_users": "machine learning engineers",
+        "project_type": "machine learning",
         "task_type": "text_classification",
         "input_type": "text",
         "output_type": "emotion_label",

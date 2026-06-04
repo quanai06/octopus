@@ -9,8 +9,8 @@ This project uses **Octopus CLI** for planning and context management.
 1. Read `requirements.md` - understand the goal and constraints.
 2. Run `octopus task next` - find the next unblocked task.
 3. Read `.octopus/context/current_context.md` - this is your working context.
-{% if project_type in ["ml", "dl", "rag"] %}
-4. Read `ml_design.md` and `experiment_plan.md` - understand the ML strategy.
+{% if project_type in ["machine learning", "deep learning", "rag"] %}
+4. Read `ml_design.md` and `experiment_plan.md` - understand the machine learning strategy.
 {% endif %}
 
 ## Rules
@@ -21,7 +21,7 @@ This project uses **Octopus CLI** for planning and context management.
 - **Do not** implement or log a main model before a baseline is logged.
 - Use `octopus task start <id>` before work and `octopus task done <id>` after work.
 - Do not manually mark `T012` done; log a baseline with `octopus exp log --kind baseline`.
-{% if project_type in ["ml", "dl"] %}
+{% if project_type in ["machine learning", "deep learning"] %}
 - Log all experiment metrics with `octopus exp log`.
 {% endif %}
 

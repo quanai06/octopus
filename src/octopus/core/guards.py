@@ -38,8 +38,10 @@ def require_ml_project() -> None:
     from octopus.storage.state_store import load_state
 
     state = load_state()
-    if state.project_type not in ("ml", "dl", "rag"):
-        console.print("[yellow]ml-plan is only for ML/DL/RAG projects.[/yellow]")
+    if state.project_type not in ("machine learning", "deep learning", "rag"):
+        console.print(
+            "[yellow]ml-plan is only for machine learning/deep learning/RAG projects.[/yellow]"
+        )
         console.print(f"Current type: {state.project_type}")
         sys.exit(0)
 

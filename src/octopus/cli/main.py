@@ -13,7 +13,7 @@ from octopus.cli.commands.sync import sync_runtime
 from octopus.cli.commands.task import app as task_app
 from octopus.cli.commands.tasks import generate_tasks
 
-app = typer.Typer(help="Octopus CLI project brain for ML/DL planning.")
+app = typer.Typer(help="Octopus CLI project brain for machine learning/deep learning planning.")
 app.add_typer(exp_app, name="exp")
 app.add_typer(task_app, name="task")
 

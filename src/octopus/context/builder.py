@@ -24,7 +24,7 @@ from octopus.core.schemas import ContextBuildResult, ProjectState
 
 PLAN_SECTIONS = [
     ("Requirements Summary", REQUIREMENTS_MD),
-    ("ML Design Summary", ML_DESIGN_MD),
+    ("Machine Learning Design Summary", ML_DESIGN_MD),
     ("Data Strategy", DATA_STRATEGY_MD),
     ("Experiment Plan", EXPERIMENT_MD),
     ("Compute Budget", COMPUTE_BUDGET_MD),

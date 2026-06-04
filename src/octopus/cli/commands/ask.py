@@ -129,18 +129,18 @@ def ask_requirements(reset: bool = False) -> None:
     target_users = _text(questionary, "Target users?", existing.target_users)
     output_type = _text(questionary, "Desired output?", existing.output_type)
 
-    console.print("[bold]ML / DL Problem[/bold]")
+    console.print("[bold]Machine Learning / Deep Learning Problem[/bold]")
     project_type = cast(
         ProjectType,
         _select_or_text(
             questionary,
             "Project type?",
-            ["software", "ml", "dl", "rag", "research"],
+            ["software", "machine learning", "deep learning", "rag", "research"],
             existing.project_type,
             custom_message="Custom project type?",
         ),
     )
-    is_ml_like = project_type in {"ml", "dl", "rag"}
+    is_ml_like = project_type in {"machine learning", "deep learning", "rag"}
     task_type = existing.task_type
     input_type = existing.input_type
     dataset_status = existing.dataset_status
