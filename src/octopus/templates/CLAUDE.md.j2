@@ -7,7 +7,7 @@ This project uses **Octopus CLI** for planning and context management.
 ## Before Starting Any Task
 
 1. Read `requirements.md` - understand the goal and constraints.
-2. Read `tasks.md` - find the current active task.
+2. Run `octopus task next` - find the next unblocked task.
 3. Read `.octopus/context/current_context.md` - this is your working context.
 {% if project_type in ["ml", "dl", "rag"] %}
 4. Read `ml_design.md` and `experiment_plan.md` - understand the ML strategy.
@@ -18,10 +18,11 @@ This project uses **Octopus CLI** for planning and context management.
 - **Do not** train a model without checking `experiment_plan.md` first.
 - **Do not** change architecture without creating an ADR in `.octopus/adr/`.
 - **Do not** load raw datasets or checkpoint files into context.
-- **Do not** implement a new experiment before baseline is logged.
-- After completing a task, update its status in `tasks.md`.
+- **Do not** implement or log a main model before a baseline is logged.
+- Use `octopus task start <id>` before work and `octopus task done <id>` after work.
+- Do not manually mark `T012` done; log a baseline with `octopus exp log --kind baseline`.
 {% if project_type in ["ml", "dl"] %}
-- Log all experiment metrics into `.octopus/experiments/` in JSON format.
+- Log all experiment metrics with `octopus exp log`.
 {% endif %}
 
 ## Context File

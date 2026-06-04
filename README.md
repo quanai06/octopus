@@ -4,6 +4,14 @@ Octopus is a Python CLI for ML/DL project planning. It captures project requirem
 generates planning files, builds a compact working context for Claude Code or Codex,
 and blocks model work until the project has an explicit plan.
 
+For ML/DL/RAG projects, Octopus asks the user to choose the baseline model from
+task-specific options instead of typing the baseline manually. That selected baseline
+is then used by `ml_design.md`, `experiment_plan.md`, `.octopus/tasks.json`, and
+baseline-first enforcement.
+
+Every single-choice or multi-choice intake prompt keeps a `custom...` option at the end,
+so users can pick a suggested workflow value or write their own when the defaults do not fit.
+
 ## Install
 
 ```bash
@@ -22,6 +30,7 @@ octopus ask       # interactive requirement intake
 octopus plan      # render requirements.md
 octopus ml-plan   # render ML design, data, compute, and experiment plans
 octopus tasks     # render tasks.md
+octopus task      # manage real task state and dependency gates
 octopus context   # build smart .octopus/context/current_context.md
 octopus exp       # init, log, compare, diagnose, suggest, and report experiments
 octopus sync      # refresh CLAUDE.md and/or AGENTS.md
@@ -41,8 +50,11 @@ octopus ask
 octopus plan
 octopus ml-plan
 octopus tasks
+octopus task next
+octopus task start T010
 octopus context --task "train TF-IDF baseline" --profile training --budget 6000
-octopus exp log --name tfidf_baseline --metric macro_f1=0.58 --note "stable baseline"
+octopus exp log --kind baseline --name tfidf_baseline --metric macro_f1=0.58 --note "stable baseline"
+octopus task start T020
 octopus sync
 octopus status
 ```
@@ -56,6 +68,7 @@ experiment_plan.md
 data_strategy.md
 compute_budget.md
 tasks.md
+.octopus/tasks.json
 CLAUDE.md
 AGENTS.md
 .octopus/config.yaml
@@ -68,8 +81,8 @@ AGENTS.md
 ## Context Rules
 
 `octopus context` builds a task-focused context file from selected markdown sections
-instead of always loading every planning file in full. Supported profiles are
-`planning`, `training`, `debugging`, and `review`.
+and relevant code snippets instead of always loading every planning file in full.
+Supported profiles are `planning`, `training`, `debugging`, and `review`.
 
 ```bash
 octopus context --task "train PhoBERT baseline" --profile training
@@ -106,6 +119,7 @@ training starts.
 octopus exp init
 
 octopus exp log \
+  --kind baseline \
   --name phobert_weighted_loss \
   --model phobert-base \
   --dataset vietnamese_emotion \
@@ -119,6 +133,10 @@ octopus exp diagnose --exp exp_001
 octopus exp suggest
 octopus exp report
 ```
+
+For ML/DL/RAG projects, Octopus blocks main-model experiment logging until a completed
+baseline exists. Logging a completed baseline marks `T010`, `T011`, and `T012` done
+in `.octopus/tasks.json`, which unblocks `T020`.
 
 Each run is saved as YAML and indexed locally:
 

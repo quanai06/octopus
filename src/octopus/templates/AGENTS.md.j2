@@ -7,7 +7,7 @@ This project uses **Octopus CLI** for planning and context management.
 ## Before Coding
 
 1. Read `requirements.md`.
-2. Read `tasks.md` - identify the current active task.
+2. Run `octopus task next` - identify the next unblocked task.
 3. Read `.octopus/context/current_context.md`.
 {% if project_type in ["ml", "dl", "rag"] %}
 4. Read `ml_design.md` and `experiment_plan.md`.
@@ -18,8 +18,10 @@ This project uses **Octopus CLI** for planning and context management.
 - Follow the current task context strictly.
 - Keep changes minimal and task-focused.
 - Do not introduce a new architecture without an ADR.
-- Do not run training before a baseline and metric are defined.
-- Update task status in `tasks.md` after implementation.
+- Do not run or log a main model before a baseline experiment is completed.
+- Use `octopus task start <id>` before implementation.
+- Use `octopus task done <id>` after implementation.
+- Log a baseline with `octopus exp log --kind baseline`; this unblocks main model tasks.
 
 ## Context Refresh
 

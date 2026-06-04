@@ -75,12 +75,19 @@ Improve {{ main_metric }} for {{ project_goal or "the target ML task" }} while k
 
 ```yaml
 experiment_id: E001
+kind: baseline
 model: "{{ baseline_models[0] }}"
 metric:
   name: "{{ main_metric }}"
   value: null
 train_time_sec: null
 notes: ""
+```
+
+CLI command:
+
+```bash
+octopus exp log --kind baseline --name baseline --model "{{ baseline_models[0] }}" --metric {{ main_metric }}=<value>
 ```
 
 ## Stop Condition

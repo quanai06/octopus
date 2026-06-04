@@ -15,15 +15,16 @@ class ProjectState(BaseModel):
     project_name: str = ""
     project_goal: str | None = None
     target_users: str | None = None
-    project_type: Literal["software", "ml", "dl", "rag", "research"] = "software"
+    project_type: str = "software"
     task_type: str | None = None
     input_type: str | None = None
     output_type: str | None = None
-    dataset_status: Literal["available", "partial", "not_ready"] | None = None
+    dataset_status: str | None = None
     dataset_size_note: str | None = None
     has_labels: bool | None = None
     has_class_imbalance: bool | None = None
     main_metric: str | None = None
+    baseline_model: str | None = None
     target_score: float | None = None
     baseline_required: bool = True
     runtime: list[str] = Field(default_factory=list)
@@ -58,6 +59,7 @@ class ContextBuildResult(BaseModel):
 class ExperimentRecord(BaseModel):
     id: str
     name: str
+    kind: Literal["baseline", "candidate", "main", "other"] = "other"
     model: str | None = None
     dataset: str | None = None
     metrics: dict[str, float] = Field(default_factory=dict)

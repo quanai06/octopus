@@ -104,3 +104,36 @@ def test_context_budget_skips_low_priority_sections(tmp_project):
     )
 
     assert result.skipped_sections
+
+
+def test_context_reports_over_budget_when_fixed_overhead_exceeds_budget(tmp_project):
+    state = _write_plan_files()
+    _, result = build_context(
+        state,
+        "train TF-IDF baseline",
+        profile="training",
+        token_budget=50,
+    )
+
+    assert result.token_status == "over_budget"
+
+
+def test_context_includes_relevant_code_files(tmp_project):
+    state = _write_plan_files()
+    Path("src").mkdir()
+    Path("src/train_baseline.py").write_text(
+        "\n".join(
+            [
+                "def train_baseline(dataset):",
+                "    model = 'TF-IDF + Logistic Regression'",
+                "    return model, dataset",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    content, result = build_context(state, "train baseline model", profile="training")
+
+    assert "## Relevant Code Context" in content
+    assert "src/train_baseline.py" in result.included_files
+    assert "train_baseline" in content

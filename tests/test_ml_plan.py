@@ -13,6 +13,20 @@ def test_ml_plan_text_classification_baseline(tmp_project):
     assert "TF-IDF + Logistic Regression" in Path("ml_design.md").read_text(encoding="utf-8")
 
 
+def test_ml_plan_uses_selected_baseline_first(tmp_project):
+    write_state(sample_ml_state(baseline_model="TF-IDF + LinearSVC"))
+    generate_ml_plan(force=True)
+
+    ml_design = Path("ml_design.md").read_text(encoding="utf-8")
+    experiment_plan = Path("experiment_plan.md").read_text(encoding="utf-8")
+
+    assert ml_design.find("- TF-IDF + LinearSVC") < ml_design.find(
+        "- TF-IDF + Logistic Regression"
+    )
+    assert "- Model: TF-IDF + LinearSVC" in experiment_plan
+    assert "Train TF-IDF + LinearSVC baseline." in experiment_plan
+
+
 def test_ml_plan_text_classification_metrics(tmp_project):
     write_state()
     generate_ml_plan(force=True)

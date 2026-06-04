@@ -3,6 +3,7 @@ from pathlib import Path
 OCTOPUS_DIR = Path(".octopus")
 CONFIG_FILE = OCTOPUS_DIR / "config.yaml"
 STATE_FILE = OCTOPUS_DIR / "project_state.json"
+TASK_STATE_FILE = OCTOPUS_DIR / "tasks.json"
 CONTEXT_DIR = OCTOPUS_DIR / "context"
 CURRENT_CONTEXT = CONTEXT_DIR / "current_context.md"
 EXPERIMENTS_DIR = OCTOPUS_DIR / "experiments"

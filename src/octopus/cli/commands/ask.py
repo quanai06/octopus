@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from typing import Literal, cast
+from typing import cast
 
 from rich.console import Console
 from rich.panel import Panel
@@ -7,11 +7,13 @@ from rich.panel import Panel
 from octopus.core.config import save_config, touch_config
 from octopus.core.guards import require_init
 from octopus.core.schemas import ComputeConfig, ProjectState
+from octopus.planners.ml_rules import rules_for_task
 from octopus.storage.state_store import load_state, save_state, state_exists
 
 console = Console()
-ProjectType = Literal["software", "ml", "dl", "rag", "research"]
-DatasetStatus = Literal["available", "partial", "not_ready"]
+CUSTOM_CHOICE = "custom..."
+ProjectType = str
+DatasetStatus = str
 
 
 def _text(
@@ -34,6 +36,31 @@ def _select(questionary, message: str, choices: list[str], default: str | None =
     return str(answer)
 
 
+def _select_or_text(
+    questionary,
+    message: str,
+    choices: list[str],
+    default: str | None = None,
+    *,
+    custom_message: str | None = None,
+    required: bool = True,
+) -> str | None:
+    options = list(choices)
+    if default and default not in options:
+        options.insert(0, default)
+    if CUSTOM_CHOICE not in options:
+        options.append(CUSTOM_CHOICE)
+    selected = _select(questionary, message, options, default if default in options else None)
+    if selected == CUSTOM_CHOICE:
+        return _text(
+            questionary,
+            custom_message or f"Custom {message.rstrip('?').lower()}?",
+            default=None,
+            required=required,
+        )
+    return selected
+
+
 def _checkbox(questionary, message: str, choices: list[str], default: list[str]) -> list[str]:
     selected = set(default)
     checkbox_choices = [
@@ -44,6 +71,27 @@ def _checkbox(questionary, message: str, choices: list[str], default: list[str])
     if answer is None:
         raise KeyboardInterrupt
     return [str(item) for item in answer if item != "none"]
+
+
+def _checkbox_or_text(
+    questionary,
+    message: str,
+    choices: list[str],
+    default: list[str],
+    *,
+    custom_message: str,
+) -> list[str]:
+    options = list(choices)
+    if CUSTOM_CHOICE not in options:
+        options.append(CUSTOM_CHOICE)
+    selected = _checkbox(questionary, message, options, default)
+    if CUSTOM_CHOICE not in selected:
+        return selected
+    selected = [item for item in selected if item != CUSTOM_CHOICE]
+    custom_value = _text(questionary, custom_message, required=True)
+    if custom_value:
+        selected.append(custom_value)
+    return selected
 
 
 def _confirm(questionary, message: str, default: bool | None = None) -> bool | None:
@@ -63,6 +111,11 @@ def _float_or_none(value: str | None) -> float | None:
         return None
 
 
+def baseline_choices_for_task(task_type: str | None) -> list[str]:
+    rules = rules_for_task(task_type if task_type != "rag" else "rag")
+    return list(rules.baseline_models)
+
+
 def ask_requirements(reset: bool = False) -> None:
     require_init()
     import questionary
@@ -79,11 +132,12 @@ def ask_requirements(reset: bool = False) -> None:
     console.print("[bold]ML / DL Problem[/bold]")
     project_type = cast(
         ProjectType,
-        _select(
+        _select_or_text(
             questionary,
             "Project type?",
             ["software", "ml", "dl", "rag", "research"],
             existing.project_type,
+            custom_message="Custom project type?",
         ),
     )
     is_ml_like = project_type in {"ml", "dl", "rag"}
@@ -93,8 +147,9 @@ def ask_requirements(reset: bool = False) -> None:
     dataset_size_note = existing.dataset_size_note
     has_labels = existing.has_labels
     has_class_imbalance = existing.has_class_imbalance
+    baseline_model = existing.baseline_model
     if is_ml_like:
-        task_type = _select(
+        task_type = _select_or_text(
             questionary,
             "Task type?",
             [
@@ -107,26 +162,36 @@ def ask_requirements(reset: bool = False) -> None:
                 "clustering",
                 "anomaly_detection",
                 "rag",
-                "other",
             ],
             task_type,
+            custom_message="Custom task type?",
         )
-        if task_type == "other":
-            task_type = _text(questionary, "Custom task type?", existing.task_type, required=True)
-        input_type = _select(
+        baseline_choices = baseline_choices_for_task(task_type)
+        if baseline_model and baseline_model not in baseline_choices:
+            baseline_choices.insert(0, baseline_model)
+        baseline_model = _select_or_text(
+            questionary,
+            "Baseline model?",
+            baseline_choices,
+            baseline_model if baseline_model in baseline_choices else baseline_choices[0],
+            custom_message="Custom baseline model?",
+        )
+        input_type = _select_or_text(
             questionary,
             "Input type?",
             ["text", "image", "tabular", "audio", "video", "multimodal", "documents"],
             input_type,
+            custom_message="Custom input type?",
         )
         output_type = _text(questionary, "Output type?", output_type, required=True)
         dataset_status = cast(
             DatasetStatus,
-            _select(
+            _select_or_text(
                 questionary,
                 "Dataset status?",
                 ["available", "partial", "not_ready"],
                 dataset_status,
+                custom_message="Custom dataset status?",
             ),
         )
         dataset_size_note = _text(questionary, "Dataset size note?", dataset_size_note)
@@ -136,17 +201,13 @@ def ask_requirements(reset: bool = False) -> None:
         )
 
     console.print("[bold]Evaluation[/bold]")
-    main_metric = _select(
+    main_metric = _select_or_text(
         questionary,
         "Main metric?",
-        ["macro_f1", "accuracy", "MAE", "RMSE", "Recall@k", "MRR", "custom"],
+        ["macro_f1", "accuracy", "MAE", "RMSE", "Recall@k", "MRR"],
         existing.main_metric,
+        custom_message="Custom main metric?",
     )
-    if main_metric == "custom":
-        custom_metric = _text(
-            questionary, "Custom main metric?", existing.main_metric, required=True
-        )
-        main_metric = custom_metric or existing.main_metric or "custom"
     target_score = _float_or_none(
         _text(questionary, "Target score?", str(existing.target_score or ""))
     )
@@ -156,18 +217,20 @@ def ask_requirements(reset: bool = False) -> None:
     has_gpu = _confirm(questionary, "Do you have GPU?", existing.compute.has_gpu)
     environment = existing.compute.environment
     if has_gpu:
-        environment = _select(
+        environment = _select_or_text(
             questionary,
             "Environment?",
             ["local", "colab_t4", "colab_a100", "kaggle", "server"],
             environment,
+            custom_message="Custom environment?",
         )
     deadline = _text(questionary, "Budget / deadline?", existing.compute.deadline)
-    runtime = _checkbox(
+    runtime = _checkbox_or_text(
         questionary,
         "Runtime?",
         ["claude", "codex", "none"],
         existing.runtime or ["claude", "codex"],
+        custom_message="Custom runtime? Use a short name such as cursor or aider.",
     )
 
     now = datetime.now(UTC)
@@ -184,6 +247,7 @@ def ask_requirements(reset: bool = False) -> None:
         has_labels=has_labels,
         has_class_imbalance=has_class_imbalance,
         main_metric=main_metric,
+        baseline_model=baseline_model if is_ml_like else None,
         target_score=target_score,
         runtime=runtime,
         compute=ComputeConfig(

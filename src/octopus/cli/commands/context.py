@@ -66,6 +66,11 @@ def build_current_context(
         console.print(
             "\n[yellow]Token warning: consider splitting the task into smaller steps.[/yellow]"
         )
+    elif result.token_status == "over_budget":
+        console.print(
+            "\n[yellow]Token budget exceeded: some sections/files were skipped, but fixed "
+            "task overhead is still above the requested budget.[/yellow]"
+        )
     elif result.token_status == "exceeded":
         console.print(
             "\n[red]Token limit exceeded: split the task before handing it to an agent.[/red]"

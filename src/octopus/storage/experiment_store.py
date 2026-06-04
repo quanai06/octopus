@@ -83,6 +83,7 @@ def write_experiment_index() -> Path:
             {
                 "id": record.id,
                 "name": record.name,
+                "kind": record.kind,
                 "model": record.model,
                 "dataset": record.dataset,
                 "status": record.status,

@@ -4,6 +4,7 @@ import yaml
 from typer.testing import CliRunner
 
 from octopus.cli.main import app
+from tests.helpers import sample_ml_state, write_state
 
 runner = CliRunner()
 
@@ -190,3 +191,27 @@ def test_exp_log_rejects_invalid_metric(tmp_project):
 
     assert result.exit_code == 1
     assert "Use key=value" in result.output
+
+
+def test_exp_log_blocks_main_model_before_baseline_for_ml_project(tmp_project):
+    _init_project()
+    write_state(sample_ml_state())
+
+    result = runner.invoke(
+        app,
+        [
+            "exp",
+            "log",
+            "--name",
+            "phobert_main",
+            "--model",
+            "phobert-base",
+            "--metric",
+            "macro_f1=0.62",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Main model experiment blocked" in result.output
+    assert "octopus exp log --kind baseline" in result.output
+    assert not Path(".octopus/experiments/exp_001.yaml").exists()

@@ -41,7 +41,10 @@ def _model_candidates(state: ProjectState) -> list[str]:
     if state.task_type == "regression":
         return ["LightGBM", "XGBoost"]
     if state.task_type in {"retrieval", "rag"}:
-        return ["BM25", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"]
+        return [
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            "cross-encoder reranker after retrieval baseline",
+        ]
     return ["Strong baseline selected after data inspection"]
 
 
@@ -60,9 +63,15 @@ def _compute_budget_notes(state: ProjectState) -> list[str]:
     ]
 
 
-def _first_experiments(rules: MlPlanRules, candidates: list[str]) -> list[str]:
+def _first_experiments(
+    rules: MlPlanRules, candidates: list[str], baseline_models: list[str]
+) -> list[str]:
     if rules.first_experiments:
-        return list(rules.first_experiments)
+        items = list(rules.first_experiments)
+        selected_baseline = baseline_models[0]
+        if not any(selected_baseline in item for item in items):
+            items.insert(1 if items else 0, f"Train {selected_baseline} baseline.")
+        return items
     return [
         rules.first_experiment_note,
         f"Train candidate model: {candidates[0]}",
@@ -70,19 +79,28 @@ def _first_experiments(rules: MlPlanRules, candidates: list[str]) -> list[str]:
     ]
 
 
+def selected_baseline_models(state: ProjectState, rules: MlPlanRules) -> list[str]:
+    if not state.baseline_model:
+        return list(rules.baseline_models)
+    remaining = [model for model in rules.baseline_models if model != state.baseline_model]
+    return [state.baseline_model, *remaining]
+
+
 def _planner_context(state: ProjectState, rules: MlPlanRules) -> dict[str, Any]:
     candidates = _model_candidates(state)
+    baseline_models = selected_baseline_models(state, rules)
     metrics = rules.metrics
     secondary_metrics = metrics[1:] if len(metrics) > 1 else []
+    first_experiment_note = f"Train a {baseline_models[0]} baseline."
     return {
         "problem_type": rules.problem_type,
         "language": _infer_language(state),
-        "baseline_models": rules.baseline_models,
+        "baseline_models": baseline_models,
         "metrics": metrics,
         "secondary_metrics": secondary_metrics,
         "risks": rules.risks,
-        "first_experiment_note": rules.first_experiment_note,
-        "first_experiments": _first_experiments(rules, candidates),
+        "first_experiment_note": first_experiment_note,
+        "first_experiments": _first_experiments(rules, candidates, baseline_models),
         "main_metric": state.main_metric or metrics[0],
         "model_candidates": candidates,
         "data_checks": list(rules.data_checks),

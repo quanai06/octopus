@@ -15,6 +15,7 @@ from octopus.core.paths import (
     TASKS_MD,
 )
 from octopus.storage.state_store import load_state
+from octopus.storage.task_store import ensure_tasks, next_unblocked_task
 
 console = Console()
 
@@ -43,6 +44,7 @@ def show_status() -> None:
     table.add_row("Type", state.task_type or state.project_type)
     table.add_row("Input", f"{state.input_type or '-'} -> {state.output_type or '-'}")
     table.add_row("Metric", state.main_metric or "-")
+    table.add_row("Baseline", state.baseline_model or "default for task type")
     gpu = "Yes" if state.compute.has_gpu else "No"
     if state.compute.environment:
         gpu = f"{gpu} ({state.compute.environment})"
@@ -67,11 +69,14 @@ def show_status() -> None:
     else:
         console.print("  Not built yet.")
 
-    if state.project_type in {"ml", "dl", "rag"}:
-        next_task = "train baseline"
+    tasks = ensure_tasks(state)
+    task = next_unblocked_task(tasks)
+    console.print("\n[bold]Tasks[/bold]")
+    if task:
+        console.print(f"  Next: {task.id} {task.title}")
+        console.print(f"\nNext suggested command:\n  octopus task start {task.id}")
     else:
-        next_task = "implement next task"
-    console.print(f'\nNext suggested command:\n  octopus context --task "{next_task}"')
+        console.print("  No unblocked todo task found.")
 
 
 def state_file_payload() -> dict[str, object]:

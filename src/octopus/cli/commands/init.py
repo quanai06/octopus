@@ -16,12 +16,13 @@ from octopus.core.paths import (
     OCTOPUS_DIR,
     REPORTS_DIR,
     REQUIREMENTS_MD,
+    TASK_STATE_FILE,
     TASKS_MD,
 )
 from octopus.core.schemas import ProjectState
 from octopus.planners.ml_planner import render_ml_plan
-from octopus.planners.ml_rules import GENERIC_RULES
 from octopus.planners.rendering import render_template
+from octopus.planners.task_planner import render_tasks
 from octopus.storage.state_store import save_state
 
 console = Console()
@@ -53,16 +54,9 @@ def init_project(runtime: str = "claude,codex", force: bool = False) -> None:
     state = ProjectState(runtime=runtimes)
     save_state(state)
 
-    generic = {
-        "baseline_models": GENERIC_RULES.baseline_models,
-        "metrics": GENERIC_RULES.metrics,
-        "risks": GENERIC_RULES.risks,
-        "first_experiment_note": GENERIC_RULES.first_experiment_note,
-        "main_metric": state.main_metric or GENERIC_RULES.metrics[0],
-    }
     atomic_write_text(REQUIREMENTS_MD, render_template("requirements.md.j2", state))
     render_ml_plan(state, backup=False)
-    atomic_write_text(TASKS_MD, render_template("tasks.md.j2", state, **generic))
+    render_tasks(state, backup=False)
     if "claude" in runtimes:
         atomic_write_text(CLAUDE_MD, render_template("CLAUDE.md.j2", state))
     if "codex" in runtimes:
@@ -76,6 +70,7 @@ def init_project(runtime: str = "claude,codex", force: bool = False) -> None:
         DATA_STRATEGY_MD,
         COMPUTE_BUDGET_MD,
         TASKS_MD,
+        TASK_STATE_FILE,
     ]
     if "claude" in runtimes:
         created.append(CLAUDE_MD)

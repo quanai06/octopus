@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -29,6 +30,29 @@ PLAN_SECTIONS = [
     ("Compute Budget", COMPUTE_BUDGET_MD),
     ("Task List", TASKS_MD),
 ]
+CODE_EXTENSIONS = {".py", ".js", ".jsx", ".ts", ".tsx", ".sql", ".toml", ".yaml", ".yml", ".sh"}
+CODE_HINTS = (
+    "train",
+    "training",
+    "baseline",
+    "model",
+    "data",
+    "dataset",
+    "loader",
+    "eval",
+    "metric",
+    "config",
+    "loss",
+)
+GENERATED_CONTEXT_FILES = {
+    REQUIREMENTS_MD.as_posix(),
+    ML_DESIGN_MD.as_posix(),
+    DATA_STRATEGY_MD.as_posix(),
+    EXPERIMENT_MD.as_posix(),
+    COMPUTE_BUDGET_MD.as_posix(),
+    TASKS_MD.as_posix(),
+    CURRENT_CONTEXT.as_posix(),
+}
 
 
 def _read_plan_file(path: Path) -> str:
@@ -46,6 +70,7 @@ def _state_snapshot(state: ProjectState) -> str:
         f"- Type: {state.task_type or state.project_type}",
         f"- Dataset: {state.dataset_status or 'unknown'}",
         f"- Main metric: {state.main_metric or 'not set'}",
+        f"- Selected baseline: {state.baseline_model or 'default for task type'}",
         f"- Target score: {state.target_score if state.target_score is not None else 'not set'}",
         f"- GPU: {'yes' if state.compute.has_gpu else 'no'}",
     ]
@@ -73,6 +98,132 @@ def _task_relevance_bonus(task: str, section: MarkdownSection) -> int:
 
 def _format_section(path: Path, section: MarkdownSection) -> str:
     return f"<!-- source: {path.as_posix()}#{section.title} -->\n{section.content}"
+
+
+def _task_words(task: str) -> set[str]:
+    return {
+        word.lower()
+        for word in re.findall(r"[A-Za-z0-9_+-]+", task)
+        if len(word) >= 3
+    }
+
+
+def _language_for_path(path: Path) -> str:
+    return {
+        ".py": "python",
+        ".js": "javascript",
+        ".jsx": "jsx",
+        ".ts": "typescript",
+        ".tsx": "tsx",
+        ".sql": "sql",
+        ".toml": "toml",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".sh": "bash",
+    }.get(path.suffix.lower(), "text")
+
+
+def _code_file_score(path: Path, text: str, task: str) -> int:
+    rel = path.as_posix().lower()
+    task_words = _task_words(task)
+    score = 0
+    for word in task_words:
+        if word in rel:
+            score += 8
+        if word in text[:8_000].lower():
+            score += 3
+    for hint in CODE_HINTS:
+        if hint in rel:
+            score += 5
+        if hint in text[:8_000].lower():
+            score += 1
+    if ("test" in rel or rel.startswith("tests/")) and not any(
+        word in task.lower() for word in ("test", "debug", "review")
+    ):
+        score -= 6
+    return score
+
+
+def _snippet_for_file(path: Path, task: str) -> str:
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    lines = text.splitlines()
+    if len(lines) <= 90:
+        return text.strip()
+
+    keywords = _task_words(task) | set(CODE_HINTS)
+    selected: list[int] = []
+    for index, line in enumerate(lines):
+        haystack = line.lower()
+        if any(keyword in haystack for keyword in keywords):
+            selected.extend(range(max(0, index - 2), min(len(lines), index + 3)))
+        if len(set(selected)) >= 90:
+            break
+    if not selected:
+        selected = list(range(min(len(lines), 80)))
+
+    snippet_lines: list[str] = []
+    previous = -1
+    for index in sorted(set(selected))[:90]:
+        if previous >= 0 and index > previous + 1:
+            snippet_lines.append("# ...")
+        snippet_lines.append(lines[index])
+        previous = index
+    return "\n".join(snippet_lines).strip()
+
+
+def _format_code_file(path: Path, snippet: str) -> str:
+    language = _language_for_path(path)
+    return (
+        f"<!-- source: {path.as_posix()} -->\n"
+        f"### {path.as_posix()}\n\n"
+        f"```{language}\n{snippet}\n```"
+    )
+
+
+def _select_code_files(
+    task: str,
+    *,
+    token_budget: int,
+    current_content: str,
+    full: bool,
+) -> tuple[list[str], list[str], list[str]]:
+    included, _, _ = scan_project_files()
+    candidates: list[tuple[int, Path, str]] = []
+    for rel in included:
+        if rel in GENERATED_CONTEXT_FILES or rel.startswith(".octopus/"):
+            continue
+        path = Path(rel)
+        if path.suffix.lower() not in CODE_EXTENSIONS:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        score = _code_file_score(path, text, task)
+        if score <= 0:
+            continue
+        candidates.append((score, path, text))
+
+    candidates.sort(key=lambda item: (-item[0], item[1].as_posix()))
+    blocks: list[str] = []
+    included_files: list[str] = []
+    skipped: list[str] = []
+    running = current_content
+    max_files = 8 if full else 5
+    for _, path, _ in candidates[: max_files * 2]:
+        snippet = _snippet_for_file(path, task)
+        if not snippet:
+            continue
+        block = _format_code_file(path, snippet)
+        if not full and estimate_tokens(f"{running}\n\n{block}") > token_budget:
+            skipped.append(f"{path.as_posix()} (budget)")
+            continue
+        blocks.append(block)
+        included_files.append(path.as_posix())
+        running = f"{running}\n\n{block}"
+        if len(included_files) >= max_files:
+            break
+    return blocks, included_files, skipped
 
 
 def _select_profile_sections(
@@ -170,6 +321,19 @@ def build_context(
             ["## Selected Planning Context", "", "_No matching planning sections found._", ""]
         )
 
+    code_blocks, included_code_files, skipped_code_files = _select_code_files(
+        task,
+        token_budget=token_budget,
+        current_content=current_content,
+        full=full,
+    )
+    if code_blocks:
+        body.extend(["## Relevant Code Context", ""])
+        body.extend(code_blocks)
+        body.append("")
+        current_content = f"{current_content}\n\n" + "\n\n".join(code_blocks)
+    skipped_sections.extend(skipped_code_files)
+
     body.extend(
         [
             "## Constraints",
@@ -186,6 +350,9 @@ def build_context(
     content = "\n".join(body)
     token_count = estimate_tokens(content)
     content = content.replace("> Estimated tokens: pending", f"> Estimated tokens: {token_count}")
+    token_status = get_token_status(token_count)
+    if not full and token_count > token_budget:
+        token_status = "over_budget"
 
     _, excluded_files, excluded_patterns = scan_project_files()
     result = ContextBuildResult(
@@ -193,8 +360,8 @@ def build_context(
         profile="full" if full else profile,
         output_path=CURRENT_CONTEXT.as_posix(),
         estimated_tokens=token_count,
-        token_status=get_token_status(token_count),
-        included_files=included_plan_files,
+        token_status=token_status,
+        included_files=[*included_plan_files, *included_code_files],
         included_sections=included_sections,
         skipped_sections=skipped_sections,
         excluded_files=excluded_files,

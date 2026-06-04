@@ -41,6 +41,9 @@
 ## Evaluation
 
 - **Main metric:** {{ main_metric or "_To be defined._" }}
+{% if baseline_model %}
+- **Selected baseline:** {{ baseline_model }}
+{% endif %}
 {% if target_score %}
 - **Target score:** {{ target_score }}
 {% endif %}

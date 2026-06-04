@@ -10,10 +10,12 @@ from octopus.cli.commands.ml_plan import generate_ml_plan
 from octopus.cli.commands.plan import generate_plan
 from octopus.cli.commands.status import show_status
 from octopus.cli.commands.sync import sync_runtime
+from octopus.cli.commands.task import app as task_app
 from octopus.cli.commands.tasks import generate_tasks
 
 app = typer.Typer(help="Octopus CLI project brain for ML/DL planning.")
 app.add_typer(exp_app, name="exp")
+app.add_typer(task_app, name="task")
 
 
 @app.command("init")

@@ -1,6 +1,12 @@
 from typer.testing import CliRunner
 
-from octopus.cli.commands.ask import _checkbox
+from octopus.cli.commands.ask import (
+    CUSTOM_CHOICE,
+    _checkbox,
+    _checkbox_or_text,
+    _select_or_text,
+    baseline_choices_for_task,
+)
 from octopus.cli.main import app
 
 
@@ -18,6 +24,7 @@ def test_help_lists_phase_1_commands():
         "sync",
         "status",
         "exp",
+        "task",
     ]:
         assert command in result.output
 
@@ -53,3 +60,76 @@ def test_checkbox_accepts_existing_runtime_default():
 
     assert answer == ["codex"]
     assert [choice.checked for choice in captured["choices"]] == [False, True, False]
+
+
+def test_baseline_choices_are_task_specific():
+    assert baseline_choices_for_task("text_classification") == [
+        "TF-IDF + Logistic Regression",
+        "TF-IDF + LinearSVC",
+    ]
+    assert baseline_choices_for_task("retrieval")[0] == "BM25"
+
+
+def test_select_or_text_accepts_custom_value():
+    class FakePrompt:
+        def __init__(self, value):
+            self.value = value
+
+        def ask(self):
+            return self.value
+
+    class FakeQuestionary:
+        @staticmethod
+        def select(message, choices, default=None):
+            assert CUSTOM_CHOICE in choices
+            return FakePrompt(CUSTOM_CHOICE)
+
+        @staticmethod
+        def text(message, default=""):
+            return FakePrompt("CatBoost baseline")
+
+    answer = _select_or_text(
+        FakeQuestionary,
+        "Baseline model?",
+        ["Linear Regression", "Random Forest"],
+        custom_message="Custom baseline model?",
+    )
+
+    assert answer == "CatBoost baseline"
+
+
+def test_checkbox_or_text_accepts_custom_runtime():
+    class FakeChoice:
+        def __init__(self, title, value, checked):
+            self.title = title
+            self.value = value
+            self.checked = checked
+
+    class FakePrompt:
+        def __init__(self, value):
+            self.value = value
+
+        def ask(self):
+            return self.value
+
+    class FakeQuestionary:
+        Choice = FakeChoice
+
+        @staticmethod
+        def checkbox(message, choices):
+            assert any(choice.value == CUSTOM_CHOICE for choice in choices)
+            return FakePrompt(["codex", CUSTOM_CHOICE])
+
+        @staticmethod
+        def text(message, default=""):
+            return FakePrompt("cursor")
+
+    answer = _checkbox_or_text(
+        FakeQuestionary,
+        "Runtime?",
+        ["claude", "codex", "none"],
+        ["codex"],
+        custom_message="Custom runtime?",
+    )
+
+    assert answer == ["codex", "cursor"]

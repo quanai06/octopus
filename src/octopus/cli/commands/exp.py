@@ -7,8 +7,13 @@ from rich.table import Table
 
 from octopus.core.files import atomic_write_text
 from octopus.core.guards import require_init
-from octopus.core.paths import EXPERIMENT_REPORT_MD
+from octopus.core.paths import EXPERIMENT_REPORT_MD, TASKS_MD
 from octopus.core.schemas import ExperimentRecord
+from octopus.core.workflow import (
+    has_completed_baseline,
+    infer_experiment_kind,
+    requires_baseline_gate,
+)
 from octopus.planners.experiment_advisor import (
     diagnose_experiment,
     suggest_for_experiment,
@@ -24,10 +29,12 @@ from octopus.storage.experiment_store import (
     save_experiment,
 )
 from octopus.storage.state_store import load_state, state_exists
+from octopus.storage.task_store import ensure_tasks, mark_baseline_tasks_done, render_tasks_markdown
 
 app = typer.Typer(help="Log and inspect ML experiments.")
 console = Console()
 ExperimentStatus = Literal["planned", "running", "completed", "failed", "skipped"]
+ExperimentKind = Literal["baseline", "candidate", "main", "other"]
 
 
 @app.command("init")
@@ -42,6 +49,13 @@ def init_experiment_tracking() -> None:
 @app.command("log")
 def log_experiment(
     name: Annotated[str, typer.Option("--name", help="Experiment name.")],
+    kind: Annotated[
+        str,
+        typer.Option(
+            "--kind",
+            help="Experiment kind: auto, baseline, candidate, main, or other.",
+        ),
+    ] = "auto",
     metric: Annotated[
         list[str] | None,
         typer.Option("--metric", help="Metric in key=value form. Can be repeated."),
@@ -58,16 +72,37 @@ def log_experiment(
     ] = "completed",
 ) -> None:
     require_init()
+    if kind not in {"auto", "baseline", "candidate", "main", "other"}:
+        console.print("[red]Invalid experiment kind.[/red]")
+        console.print("Use: auto, baseline, candidate, main, or other.")
+        raise typer.Exit(1)
     if status not in {"planned", "running", "completed", "failed", "skipped"}:
         console.print("[red]Invalid status.[/red]")
         console.print("Use: planned, running, completed, failed, or skipped.")
         raise typer.Exit(1)
     status_value = cast(ExperimentStatus, status)
+    kind_value = cast(ExperimentKind, infer_experiment_kind(name, model, kind))
+    if state_exists():
+        state = load_state()
+        if (
+            requires_baseline_gate(state)
+            and kind_value in {"candidate", "main"}
+            and not has_completed_baseline()
+        ):
+            console.print("[red]Main model experiment blocked: no completed baseline found.[/red]")
+            console.print("Start with a baseline and log it first:")
+            console.print(
+                "  octopus exp log --kind baseline --name baseline --metric "
+                f"{state.main_metric or 'metric'}=<value>"
+            )
+            console.print("Then run: octopus task start T020")
+            raise typer.Exit(1)
     metrics = _parse_metrics(metric or [])
     notes = _parse_notes(note)
     record = ExperimentRecord(
         id=next_experiment_id(),
         name=name,
+        kind=kind_value,
         model=model,
         dataset=dataset,
         metrics=metrics,
@@ -77,10 +112,15 @@ def log_experiment(
     )
     record.next_ideas = suggest_for_experiment(record)
     path = save_experiment(record)
+    if state_exists() and kind_value == "baseline" and status_value == "completed":
+        state = load_state()
+        tasks = mark_baseline_tasks_done(ensure_tasks(state))
+        atomic_write_text(TASKS_MD, render_tasks_markdown(state, tasks))
 
     console.print("[green]Experiment logged.[/green]\n")
     console.print(f"  ID:     {record.id}")
     console.print(f"  Name:   {record.name}")
+    console.print(f"  Kind:   {record.kind}")
     console.print(f"  Output: {path.as_posix()}")
     if record.next_ideas:
         console.print("\n  Next ideas:")
