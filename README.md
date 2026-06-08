@@ -15,6 +15,10 @@ requirements -> plan -> baseline context -> baseline run -> ingest/profile
 Octopus is not a training framework. It is the project brain and guardrail layer
 around your training/eval scripts.
 
+📚 **Full documentation:** [`docs/`](docs/README.md) — getting started, concepts,
+how-to guides (Claude Code, Codex, headless, tracker ingest, tuning loop, resume),
+and a complete CLI / configuration / files reference.
+
 ## What Octopus Gives Codex
 
 - A one-command baseline setup prompt: `octopus-baseline`.
