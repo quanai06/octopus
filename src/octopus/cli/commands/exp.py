@@ -16,6 +16,11 @@ from octopus.core.workflow import (
     requires_baseline_gate,
 )
 from octopus.experiments.analyze import analyze_experiment
+from octopus.experiments.baseline_profile import (
+    NoBaselineError,
+    profile_baseline,
+    write_baseline_profile_md,
+)
 from octopus.experiments.ingest import ingest_run_dir
 from octopus.experiments.next_planner import (
     generate_next_directions,
@@ -23,6 +28,7 @@ from octopus.experiments.next_planner import (
     write_next_steps_yaml,
 )
 from octopus.experiments.selection import choose_direction
+from octopus.experiments.trackers import TrackerImportError
 from octopus.planners.experiment_advisor import (
     diagnose_experiment,
     suggest_for_experiment,
@@ -319,10 +325,21 @@ def ingest_experiment(
         list[str] | None,
         typer.Option("--tag", help="Experiment tag. Can be repeated."),
     ] = None,
+    tracker: Annotated[
+        str,
+        typer.Option(
+            "--tracker",
+            help="Tracker auto-detection: auto, mlflow, wandb, tensorboard, or none.",
+        ),
+    ] = "auto",
 ) -> None:
     require_init()
     if run_dir is None and metrics is None and report is None:
         console.print("[red]Provide --run-dir, --metrics, or --report.[/red]")
+        raise typer.Exit(1)
+    if tracker not in {"auto", "mlflow", "wandb", "tensorboard", "none"}:
+        console.print("[red]Invalid tracker.[/red]")
+        console.print("Use: auto, mlflow, wandb, tensorboard, or none.")
         raise typer.Exit(1)
     try:
         record = ingest_run_dir(
@@ -336,8 +353,9 @@ def ingest_experiment(
             dataset=dataset,
             notes=note or [],
             tags=tag or [],
+            tracker=tracker,
         )
-    except (FileExistsError, FileNotFoundError, ValueError) as exc:
+    except (FileExistsError, FileNotFoundError, ValueError, TrackerImportError) as exc:
         console.print(f"[red]Experiment ingest failed: {exc}[/red]")
         raise typer.Exit(1) from exc
 
@@ -376,6 +394,42 @@ def analyze_ingested_experiment(
         console.print("Recommended focus:")
         for item in diagnosis.recommended_focus:
             console.print(f"  - {item}")
+
+
+@app.command("profile")
+def profile_baseline_experiment(
+    exp_id: Annotated[
+        str | None,
+        typer.Option("--exp", help="Baseline experiment ID. Defaults to the best baseline."),
+    ] = None,
+    top_k: Annotated[
+        int,
+        typer.Option("--top-k", help="Number of recommended techniques to include."),
+    ] = 5,
+) -> None:
+    require_init()
+    try:
+        profile = profile_baseline(exp_id, top_k=top_k)
+    except NoBaselineError as exc:
+        console.print(f"[red]{exc}[/red]")
+        console.print("Log a baseline first:")
+        console.print("  octopus exp log --kind baseline --name baseline --metric <metric>=<value>")
+        raise typer.Exit(1) from exc
+    except FileNotFoundError as exc:
+        console.print(f"[red]Experiment not found: {exc.filename}[/red]")
+        raise typer.Exit(1) from exc
+
+    output = write_baseline_profile_md(profile)
+    console.print(f"[green]Baseline profile generated for {profile.experiment_id}.[/green]\n")
+    console.print(f"  Domain:    {profile.domain}")
+    console.print(f"  Standing:  {profile.standing}")
+    console.print(f"  Bias/var:  {profile.bias_variance}")
+    console.print(f"  Readiness: {profile.readiness}")
+    if profile.recommended_techniques:
+        console.print("\n  Top techniques:")
+        for technique in profile.recommended_techniques:
+            console.print(f"    - {technique.name} ({technique.category}, risk {technique.risk})")
+    console.print(f"\n  Output: {output.as_posix()}")
 
 
 @app.command("next")

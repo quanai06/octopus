@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -7,14 +8,33 @@ from octopus.core.files import atomic_write_text
 from octopus.core.paths import FAILURES_MD, NEXT_STEPS_MD, NEXT_STEPS_YAML
 from octopus.core.schemas import NextDirection
 from octopus.experiments.analyze import (
+    LOW_RECALL_THRESHOLD,
     detect_imbalance,
     detect_metric_gap,
     detect_overfitting,
     detect_underfitting,
     detect_unstable_training,
 )
+from octopus.experiments.technique_library import (
+    DOMAIN_RAG,
+    SYMPTOM_CLASS_IMBALANCE,
+    SYMPTOM_LARGE_GAP,
+    SYMPTOM_LOW_RETRIEVAL,
+    SYMPTOM_METRIC_GAP,
+    SYMPTOM_NEAR_TARGET,
+    SYMPTOM_OVERFITTING,
+    SYMPTOM_UNDERFITTING,
+    SYMPTOM_UNSTABLE,
+    Technique,
+    antipatterns_for,
+    domain_for,
+    techniques_for,
+)
 from octopus.storage.experiment_store import list_experiments, load_experiment_index
 from octopus.storage.state_store import load_state, state_exists
+
+SMALL_GAP = 0.03
+MODERATE_GAP = 0.10
 
 
 def generate_next_directions(top_k: int | None = None) -> list[NextDirection]:
@@ -32,7 +52,10 @@ def generate_next_directions(top_k: int | None = None) -> list[NextDirection]:
         if state and state.target_score is not None and best and main_metric in best.metrics:
             target_gap = state.target_score - best.metrics[main_metric]
         project_type = state.project_type if state else ""
-        directions = _directions_from_signals(best, completed, target_gap, project_type)
+        task_type = state.task_type if state else None
+        directions = _directions_from_signals(
+            best, completed, target_gap, project_type, task_type
+        )
 
     directions = _filter_failed_directions(directions)
     ranked = rank_directions(directions)
@@ -89,7 +112,7 @@ def write_next_steps_markdown(
             *_bullet_list(_all_evidence(directions)),
             "",
             "### What is unlikely",
-            *_bullet_list(_unlikely(directions)),
+            *_bullet_list(_unlikely(directions, best, completed, state)),
             "",
             "## 3. Ranked Directions",
             "",
@@ -177,200 +200,236 @@ def write_next_steps_yaml(directions: list[NextDirection]) -> Path:
     return NEXT_STEPS_YAML
 
 
+@dataclass(frozen=True)
+class _DirectionTemplate:
+    symptoms: tuple[str, ...]
+    title: str
+    priority: int
+    expected_impact: str
+    rationale: str
+    files_to_read: tuple[str, ...]
+    files_to_edit: tuple[str, ...]
+    confidence: str = "high"
+    risk: str = "low"
+    cost: str = "low"
+    stop_condition: str = "Run one controlled change and compare against the current best run."
+    force_optional: bool = False
+
+
+# Symptom-level direction frames, in priority order. The concrete techniques,
+# guardrails, and cost/risk come from the technique library so the ML knowledge
+# lives in one place.
+_DIRECTION_TEMPLATES: tuple[_DirectionTemplate, ...] = (
+    _DirectionTemplate(
+        symptoms=(SYMPTOM_LOW_RETRIEVAL,),
+        title="Improve retrieval recall before changing the generator",
+        priority=1,
+        expected_impact="Raise Recall@k / source-hit so generation can be trusted.",
+        rationale=(
+            "RAG quality must be improved from measured retrieval before prompt or "
+            "generation changes."
+        ),
+        files_to_read=("retriever", "embedding", "chunk", "index", "eval"),
+        files_to_edit=("retriever", "eval", "metrics"),
+        confidence="medium",
+        cost="medium",
+        stop_condition="Retrieval eval reports Recall@k / source-hit for a fixed query set.",
+    ),
+    _DirectionTemplate(
+        symptoms=(SYMPTOM_CLASS_IMBALANCE, SYMPTOM_METRIC_GAP),
+        title="Improve minority recall with class weighting",
+        priority=1,
+        expected_impact=(
+            "Improve macro F1 and minority recall without a large architecture change."
+        ),
+        rationale=(
+            "The strongest evidence points to uneven per-class performance, so fix the "
+            "objective/sampling before changing the backbone."
+        ),
+        files_to_read=("loss", "class_weight", "sampler", "dataset", "label", "metrics"),
+        files_to_edit=("training config", "loss function", "dataset sampler", "metrics"),
+        stop_condition=(
+            "New run improves macro_f1 or minority recall without lowering overall "
+            "validation quality."
+        ),
+    ),
+    _DirectionTemplate(
+        symptoms=(SYMPTOM_OVERFITTING,),
+        title="Reduce overfitting with early stopping and regularization",
+        priority=2,
+        expected_impact="Stabilize validation score and reduce wasted epochs.",
+        rationale=(
+            "Training and validation evidence suggests the model is fitting training data "
+            "faster than validation quality improves."
+        ),
+        files_to_read=("trainer", "early_stopping", "dropout", "weight_decay", "config"),
+        files_to_edit=("training config", "trainer callbacks"),
+        stop_condition=(
+            "Validation loss no longer diverges while the main metric stays stable or improves."
+        ),
+    ),
+    _DirectionTemplate(
+        symptoms=(SYMPTOM_UNSTABLE,),
+        title="Stabilize optimization",
+        priority=3,
+        expected_impact="Reduce noisy validation behavior.",
+        rationale="Loss instability should be handled before interpreting model quality.",
+        files_to_read=("optimizer", "scheduler", "lr", "warmup", "batch", "fp16"),
+        files_to_edit=("optimizer config", "training config"),
+        confidence="medium",
+        stop_condition="Loss curves stop spiking or diverging on a repeatable run.",
+    ),
+    _DirectionTemplate(
+        symptoms=(SYMPTOM_UNDERFITTING,),
+        title="Check preprocessing and capacity for underfitting",
+        priority=4,
+        expected_impact="Find pipeline issues or justify a stronger model.",
+        rationale=(
+            "Both train and validation signals are weak, so first verify the input pipeline "
+            "and basic capacity."
+        ),
+        files_to_read=("preprocess", "dataset", "model", "train", "metrics"),
+        files_to_edit=("preprocessing", "model config"),
+        confidence="medium",
+        risk="medium",
+        cost="medium",
+        stop_condition="One-batch sanity check passes or a preprocessing defect is fixed.",
+    ),
+    _DirectionTemplate(
+        symptoms=(SYMPTOM_NEAR_TARGET,),
+        title="Run a low-risk metric-focused refinement",
+        priority=5,
+        expected_impact="Close a small gap without destabilizing the training setup.",
+        rationale=(
+            "The target gap is small, so avoid broad rewrites and prefer one small measured "
+            "change."
+        ),
+        files_to_read=("metrics", "threshold", "evaluate", "config"),
+        files_to_edit=("evaluation config", "training config"),
+        confidence="medium",
+        stop_condition="Main metric crosses the target or stops improving after one change.",
+        force_optional=True,
+    ),
+)
+
+
 def _directions_from_signals(
-    best, completed, target_gap: float | None, project_type: str
+    best, completed, target_gap: float | None, project_type: str, task_type: str | None
 ) -> list[NextDirection]:
+    domain = domain_for(task_type, project_type)
+    signals = {
+        signal.name: signal
+        for signal in _detect_signals(best, completed)
+        if signal.status == "detected"
+    }
+    symptoms = _symptom_set(set(signals), domain, best, target_gap)
+
+    directions: list[NextDirection] = []
+    next_id = 1
+    for template in _DIRECTION_TEMPLATES:
+        matched = [name for name in template.symptoms if name in symptoms]
+        if not matched:
+            continue
+        techniques = techniques_for(domain, list(template.symptoms))
+        if not techniques:
+            continue
+        evidence = _template_evidence(matched, signals, target_gap)
+        directions.append(
+            _build_direction(next_id, template, techniques, evidence, already_used=bool(directions))
+        )
+        next_id += 1
+
+    return directions or [_generic_next_direction(best.id)]
+
+
+def _detect_signals(best, completed):
     history = list(completed)
-    signals = [
+    return [
         detect_imbalance(best, history),
         detect_metric_gap(best, history),
         detect_overfitting(best, history),
         detect_unstable_training(best, history),
         detect_underfitting(best, history),
     ]
-    detected = {signal.name: signal for signal in signals if signal.status == "detected"}
-    directions: list[NextDirection] = []
-    next_id = 1
 
-    if project_type == "rag":
-        directions.append(
-            NextDirection(
-                direction_id=f"D{next_id}",
-                title="Build retrieval evaluation before prompt changes",
-                priority=1,
-                recommendation="recommended",
-                rationale=(
-                    "RAG quality should be improved from measured retrieval recall and "
-                    "citation coverage before prompt-only changes."
-                ),
-                evidence=["project_type=rag"],
-                confidence="medium",
-                risk="low",
-                cost="medium",
-                expected_impact=(
-                    "Expose retrieval bottlenecks and prevent unsupported answer tuning."
-                ),
-                files_to_read=["retriever", "embedding", "chunk", "index", "prompt"],
-                files_to_edit=["retriever", "eval", "metrics"],
-                commands_to_run=["pytest -q"],
-                guardrails=[
-                    "Require citation and faithfulness checks.",
-                    "Do not tune on private eval answers.",
-                ],
-                stop_condition=(
-                    "Retrieval eval reports recall/source-hit metrics for a fixed query set."
-                ),
-            )
-        )
-        next_id += 1
 
-    if "class_imbalance" in detected or "metric_gap" in detected:
-        evidence = detected.get("class_imbalance", detected.get("metric_gap")).evidence
-        directions.append(
-            NextDirection(
-                direction_id=f"D{next_id}",
-                title="Improve minority recall with class weighting",
-                priority=1,
-                recommendation="recommended",
-                rationale=(
-                    "The strongest evidence points to uneven per-class performance, so fix "
-                    "the objective/sampling before changing the backbone."
-                ),
-                evidence=evidence,
-                confidence="high",
-                risk="low",
-                cost="low",
-                expected_impact=(
-                    "Improve macro F1 and minority recall without a large architecture change."
-                ),
-                files_to_read=["loss", "class_weight", "sampler", "dataset", "label", "metrics"],
-                files_to_edit=["training config", "loss function", "dataset sampler", "metrics"],
-                commands_to_run=["pytest -q"],
-                guardrails=[
-                    "Do not change train/validation/test split.",
-                    "Track macro_f1 and per-class recall.",
-                    "Change only weighting/sampling in the next run.",
-                ],
-                stop_condition=(
-                    "New run improves macro_f1 or minority recall without lowering overall "
-                    "validation quality."
-                ),
-            )
-        )
-        next_id += 1
+def _symptom_set(detected: set[str], domain: str, best, target_gap: float | None) -> set[str]:
+    symptoms = set(detected)
+    if domain == DOMAIN_RAG and _looks_like_low_retrieval(best, target_gap):
+        symptoms.add(SYMPTOM_LOW_RETRIEVAL)
+    if target_gap is not None:
+        if 0 < target_gap <= SMALL_GAP:
+            symptoms.add(SYMPTOM_NEAR_TARGET)
+        elif target_gap > MODERATE_GAP:
+            symptoms.add(SYMPTOM_LARGE_GAP)
+    return symptoms
 
-    if "overfitting" in detected:
-        directions.append(
-            NextDirection(
-                direction_id=f"D{next_id}",
-                title="Reduce overfitting with early stopping and regularization",
-                priority=2,
-                recommendation="recommended" if not directions else "optional",
-                rationale=(
-                    "Training and validation evidence suggests the model is fitting training "
-                    "data faster than validation quality improves."
-                ),
-                evidence=detected["overfitting"].evidence,
-                confidence="high",
-                risk="low",
-                cost="low",
-                expected_impact="Stabilize validation score and reduce wasted epochs.",
-                files_to_read=["trainer", "early_stopping", "dropout", "weight_decay", "config"],
-                files_to_edit=["training config", "trainer callbacks"],
-                commands_to_run=["pytest -q"],
-                guardrails=[
-                    "Do not increase epochs as the first response.",
-                    "Keep the same validation split.",
-                ],
-                stop_condition=(
-                    "Validation loss no longer diverges while main metric stays stable or "
-                    "improves."
-                ),
-            )
-        )
-        next_id += 1
 
-    if "unstable_training" in detected:
-        directions.append(
-            NextDirection(
-                direction_id=f"D{next_id}",
-                title="Stabilize optimization",
-                priority=3,
-                recommendation="recommended" if not directions else "optional",
-                rationale="Loss instability should be handled before interpreting model quality.",
-                evidence=detected["unstable_training"].evidence,
-                confidence="medium",
-                risk="low",
-                cost="low",
-                expected_impact="Reduce noisy validation behavior.",
-                files_to_read=["optimizer", "scheduler", "lr", "warmup", "batch", "fp16"],
-                files_to_edit=["optimizer config", "training config"],
-                commands_to_run=["pytest -q"],
-                guardrails=[
-                    "Lower learning rate before increasing model complexity.",
-                    "Check NaN/inf handling.",
-                ],
-                stop_condition="Loss curves stop spiking or diverging on a repeatable run.",
-            )
-        )
-        next_id += 1
+def _looks_like_low_retrieval(best, target_gap: float | None) -> bool:
+    retrieval_values = [
+        value
+        for key, value in best.metrics.items()
+        if any(token in key.lower() for token in ("recall", "hit", "mrr", "ndcg"))
+    ]
+    if retrieval_values and min(retrieval_values) < LOW_RECALL_THRESHOLD:
+        return True
+    return target_gap is not None and target_gap > MODERATE_GAP
 
-    if "underfitting" in detected:
-        directions.append(
-            NextDirection(
-                direction_id=f"D{next_id}",
-                title="Check preprocessing and capacity for underfitting",
-                priority=4,
-                recommendation="recommended" if not directions else "optional",
-                rationale=(
-                    "Both train and validation signals are weak, so first verify input "
-                    "pipeline and basic capacity."
-                ),
-                evidence=detected["underfitting"].evidence,
-                confidence="medium",
-                risk="medium",
-                cost="medium",
-                expected_impact="Find pipeline issues or justify a stronger model.",
-                files_to_read=["preprocess", "dataset", "model", "train", "metrics"],
-                files_to_edit=["preprocessing", "model config"],
-                commands_to_run=["pytest -q"],
-                guardrails=["Run a one-batch overfit sanity check before large sweeps."],
-                stop_condition="One-batch sanity check passes or preprocessing defect is fixed.",
-            )
-        )
-        next_id += 1
 
-    if target_gap is not None and 0 < target_gap <= 0.03:
-        directions.append(
-            NextDirection(
-                direction_id=f"D{next_id}",
-                title="Run a low-risk metric-focused refinement",
-                priority=5,
-                recommendation="optional",
-                rationale=(
-                    "The target gap is small, so avoid broad rewrites and prefer one small "
-                    "measured change."
-                ),
-                evidence=[f"target_gap={target_gap:+.3f}"],
-                confidence="medium",
-                risk="low",
-                cost="low",
-                expected_impact="Close a small gap without destabilizing the training setup.",
-                files_to_read=["metrics", "threshold", "evaluate", "config"],
-                files_to_edit=["evaluation config", "training config"],
-                commands_to_run=["pytest -q"],
-                guardrails=[
-                    "Do not tune on the test set.",
-                    "Keep the comparison metric unchanged.",
-                ],
-                stop_condition=(
-                    "Main metric crosses target or no longer improves after one controlled "
-                    "change."
-                ),
-            )
-        )
+def _template_evidence(matched, signals, target_gap: float | None) -> list[str]:
+    evidence: list[str] = []
+    for name in matched:
+        signal = signals.get(name)
+        if signal:
+            evidence.extend(signal.evidence)
+    if not evidence and target_gap is not None:
+        evidence.append(f"target_gap={target_gap:+.3f}")
+    return evidence or ["See the training review for diagnosis evidence."]
 
-    return directions or [_generic_next_direction(best.id)]
+
+def _build_direction(
+    next_id: int,
+    template: _DirectionTemplate,
+    techniques: list[Technique],
+    evidence: list[str],
+    *,
+    already_used: bool,
+) -> NextDirection:
+    names = ", ".join(technique.name for technique in techniques[:4])
+    guardrails = _dedup(
+        [guardrail for technique in techniques[:3] for guardrail in technique.guardrails]
+    )[:4]
+    guardrails.append(
+        "Do not change train/validation/test split unless this is the selected direction."
+    )
+    recommendation = "optional" if (already_used or template.force_optional) else "recommended"
+    return NextDirection(
+        direction_id=f"D{next_id}",
+        title=template.title,
+        priority=template.priority,
+        recommendation=recommendation,  # type: ignore[arg-type]
+        rationale=f"{template.rationale} Suggested techniques in priority order: {names}.",
+        evidence=evidence,
+        confidence=template.confidence,  # type: ignore[arg-type]
+        risk=template.risk,  # type: ignore[arg-type]
+        cost=template.cost,  # type: ignore[arg-type]
+        expected_impact=template.expected_impact,
+        files_to_read=list(template.files_to_read),
+        files_to_edit=list(template.files_to_edit),
+        commands_to_run=["pytest -q"],
+        guardrails=_dedup(guardrails),
+        stop_condition=template.stop_condition,
+    )
+
+
+def _dedup(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
 
 
 def _baseline_first_directions(is_rag: bool) -> list[NextDirection]:
@@ -498,14 +557,30 @@ def _all_evidence(directions: list[NextDirection]) -> list[str]:
     return evidence[:8]
 
 
-def _unlikely(directions: list[NextDirection]) -> list[str]:
-    if any("minority" in direction.title.lower() for direction in directions):
-        return ["A larger backbone is unlikely to be the safest first fix."]
-    if any("overfitting" in direction.title.lower() for direction in directions):
-        return ["More epochs are unlikely to help before regularization."]
+def _unlikely(directions: list[NextDirection], best, completed, state) -> list[str]:
     if any(direction.recommendation == "blocked" for direction in directions):
         return ["Main-model work should wait until baseline evidence exists."]
-    return ["No unsupported avoid rule detected."]
+    if best is None:
+        return ["No unsupported avoid rule detected."]
+    domain = domain_for(
+        state.task_type if state else None,
+        state.project_type if state else None,
+    )
+    target_gap = None
+    if state and state.target_score is not None:
+        main_metric = _main_metric([best, *completed])
+        if main_metric in best.metrics:
+            target_gap = state.target_score - best.metrics[main_metric]
+    detected = {
+        signal.name
+        for signal in _detect_signals(best, completed)
+        if signal.status == "detected"
+    }
+    symptoms = _symptom_set(detected, domain, best, target_gap)
+    antis = antipatterns_for(list(symptoms))
+    if not antis:
+        return ["No unsupported avoid rule detected."]
+    return [f"{anti.name} — {anti.reason}" for anti in antis]
 
 
 def _bullet_list(items: list[str]) -> list[str]:

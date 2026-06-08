@@ -51,8 +51,11 @@ Before editing training code:
 6. Do not tune on the test set.
 7. After a new run, ask the user to run or run:
    `octopus exp ingest --run-dir <run_dir>`
-8. Do not edit `.octopus/tasks.json` manually.
-9. Do not edit `.octopus/experiments/*.yaml` manually unless the user explicitly asks.
+8. After the baseline is logged, run `octopus exp profile` and read
+   `.octopus/reports/baseline_profile.md` to understand the baseline before tuning.
+   Implement the top-ranked technique only; respect the "Do Not Try Yet" list.
+9. Do not edit `.octopus/tasks.json` manually.
+10. Do not edit `.octopus/experiments/*.yaml` manually unless the user explicitly asks.
 
 ## Runtime
 

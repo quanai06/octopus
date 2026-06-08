@@ -32,7 +32,7 @@ octopus ml-plan   # render ML design, data, compute, and experiment plans
 octopus tasks     # render tasks.md
 octopus task      # manage real task state and dependency gates
 octopus context   # build smart .octopus/context/current_context.md
-octopus exp       # init, log, compare, diagnose, suggest, and report experiments
+octopus exp       # init, log, ingest, analyze, profile, next, compare, and report experiments
 octopus sync      # refresh CLAUDE.md and/or AGENTS.md
 octopus status    # show project snapshot
 ```
@@ -152,6 +152,42 @@ Each run is saved as YAML and indexed locally:
 Experiment diagnosis and suggestions are rule-based. Octopus flags overfitting,
 underfitting, high accuracy with low macro F1, low minority recall, weak overall
 metrics, unstable loss, and metrics that stop changing across recent runs.
+
+## Baseline Profile
+
+Before tuning, `octopus exp profile` builds a deep understanding of the baseline
+and writes `.octopus/reports/baseline_profile.md`:
+
+```bash
+octopus exp profile            # profile the best completed baseline
+octopus exp profile --exp E001 # profile a specific run
+octopus exp profile --top-k 3  # limit recommended techniques
+```
+
+The profile reports where the baseline stands vs the target, whether it is
+bias- or variance-limited, weak classes, data-quality risks, and a ranked list
+of concrete tuning techniques (plus a "Do Not Try Yet" list). Recommendations
+are domain-aware: classification, regression, and RAG/retrieval each draw from a
+deterministic technique library (`octopus.experiments.technique_library`) that
+maps diagnosed symptoms to techniques, ordered by leverage, cost, and risk.
+
+## Tracker Auto-Ingest
+
+`octopus exp ingest` auto-detects and reads common experiment trackers, so you
+can point it at a tracker run directory instead of writing `metrics.json` by hand:
+
+```bash
+octopus exp ingest --run-dir mlruns/0/<run_id> --kind baseline   # MLflow
+octopus exp ingest --run-dir wandb/run-<id>                       # Weights & Biases
+octopus exp ingest --run-dir runs/<name>                          # TensorBoard
+octopus exp ingest --run-dir runs/E001 --tracker none            # disable detection
+```
+
+MLflow and W&B are parsed directly from their on-disk files (no extra
+dependency). TensorBoard event files need the optional `tensorboard` package;
+without it, ingest reports a clear install hint. Detected runs are tagged with
+their source (for example `source:mlflow`). Explicit `--metrics` / `--report`
+files always take precedence over tracker values.
 
 ## Development
 

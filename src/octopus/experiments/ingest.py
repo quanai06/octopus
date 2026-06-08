@@ -8,6 +8,7 @@ import yaml  # type: ignore[import-untyped]
 
 from octopus.core.guards import require_init
 from octopus.core.schemas import ExperimentArtifacts, ExperimentRecord, PerClassMetrics
+from octopus.experiments.trackers import TrackerRun, load_tracker_run
 from octopus.storage.experiment_store import next_experiment_id, save_experiment
 
 
@@ -54,6 +55,7 @@ def ingest_run_dir(
     status: str = "completed",
     notes: list[str] | None = None,
     tags: list[str] | None = None,
+    tracker: str = "auto",
 ) -> ExperimentRecord:
     require_init()
     run_dir = run_dir.expanduser()
@@ -70,6 +72,10 @@ def ingest_run_dir(
     metrics: dict[str, float] = {}
     per_class: dict[str, PerClassMetrics] = {}
 
+    tracker_run = load_tracker_run(run_dir, tracker) if run_dir.exists() else None
+    if tracker_run is not None:
+        _merge_tracker(metrics, metadata, tracker_run)
+
     if metrics_file and metrics_file.exists():
         metrics.update(read_metrics_json(metrics_file))
     if report_file and report_file.exists():
@@ -80,6 +86,12 @@ def ingest_run_dir(
         metrics.update(_metrics_from_trainer_state(read_trainer_state(trainer_state_file)))
     if log_file and log_file.exists() and not metrics:
         metrics.update(_metrics_from_log(log_file))
+
+    record_notes = list(notes or [])
+    record_tags = list(tags or [])
+    if tracker_run is not None:
+        record_tags.append(f"source:{tracker_run.source}")
+        record_notes.append(f"Ingested from {tracker_run.source} run.")
 
     record = ExperimentRecord(
         id=next_experiment_id(),
@@ -93,8 +105,8 @@ def ingest_run_dir(
         per_class=per_class,
         duration_sec=metrics.pop("duration_sec", None),
         timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
-        notes=notes or [],
-        tags=tags or [],
+        notes=record_notes,
+        tags=record_tags,
         artifacts=ExperimentArtifacts(
             run_dir=run_dir.as_posix() if run_dir.exists() else None,
             log_path=log_file.as_posix() if log_file else None,
@@ -106,6 +118,29 @@ def ingest_run_dir(
     )
     save_experiment(record, allow_overwrite=False)
     return record
+
+
+def _merge_tracker(
+    metrics: dict[str, float], metadata: dict[str, Any], tracker_run: TrackerRun
+) -> None:
+    """Merge tracker metrics/params into the in-progress record fields.
+
+    Tracker values are the base layer; explicit files (metrics.json, reports)
+    merged afterwards take precedence.
+    """
+    for key, value in tracker_run.metrics.items():
+        metrics.setdefault(_normalize_metric_key(key), value)
+    if not metadata.get("model"):
+        metadata["model"] = _first_present(tracker_run.params, ("model", "model_name", "backbone"))
+    if not metadata.get("dataset"):
+        metadata["dataset"] = _first_present(
+            tracker_run.params, ("dataset", "dataset_name", "data")
+        )
+    name = metadata.get("name")
+    if (not name or name == "training_run") and tracker_run.name:
+        metadata["name"] = _slug(tracker_run.name)
+        if "baseline" in tracker_run.name.lower():
+            metadata["kind"] = "baseline"
 
 
 def _read_json(path: Path) -> dict[str, Any]:

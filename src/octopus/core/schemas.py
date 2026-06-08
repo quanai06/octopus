@@ -167,3 +167,42 @@ class SelectedDirection(BaseModel):
     selected_at: str
     source_plan: str
     status: Literal["selected", "completed", "abandoned"] = "selected"
+
+
+class TechniqueSuggestion(BaseModel):
+    technique_id: str
+    name: str
+    category: str
+    why: str
+    expected_effect: str
+    cost: Literal["low", "medium", "high"] = "medium"
+    risk: Literal["low", "medium", "high"] = "medium"
+    guardrails: list[str] = Field(default_factory=list)
+
+
+class WeakClass(BaseModel):
+    label: str
+    recall: float | None = None
+    support: int | None = None
+
+
+class BaselineProfile(BaseModel):
+    experiment_id: str
+    name: str
+    domain: str
+    main_metric: str | None = None
+    main_metric_value: float | None = None
+    target_score: float | None = None
+    target_gap: float | None = None
+    headroom: Literal["at_or_above_target", "small", "moderate", "large", "no_target"] = "no_target"
+    bias_variance: Literal[
+        "high_bias_underfit", "high_variance_overfit", "balanced", "undetermined"
+    ] = "undetermined"
+    readiness: Literal["no_baseline", "stabilize_baseline_first", "ready_to_tune"] = "ready_to_tune"
+    detected_symptoms: list[str] = Field(default_factory=list)
+    weak_classes: list[WeakClass] = Field(default_factory=list)
+    data_quality_flags: list[str] = Field(default_factory=list)
+    standing: str = ""
+    summary: str = ""
+    recommended_techniques: list[TechniqueSuggestion] = Field(default_factory=list)
+    do_not_try_yet: list[str] = Field(default_factory=list)
