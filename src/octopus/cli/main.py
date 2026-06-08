@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -6,8 +7,11 @@ from octopus.cli.commands.ask import ask_requirements
 from octopus.cli.commands.context import build_current_context
 from octopus.cli.commands.exp import app as exp_app
 from octopus.cli.commands.init import init_project
+from octopus.cli.commands.install import install_runtimes, uninstall_runtimes
 from octopus.cli.commands.ml_plan import generate_ml_plan
 from octopus.cli.commands.plan import generate_plan
+from octopus.cli.commands.session import app as session_app
+from octopus.cli.commands.session import resume as resume_session
 from octopus.cli.commands.status import show_status
 from octopus.cli.commands.sync import sync_runtime
 from octopus.cli.commands.task import app as task_app
@@ -16,6 +20,7 @@ from octopus.cli.commands.tasks import generate_tasks
 app = typer.Typer(help="Octopus CLI project brain for machine learning/deep learning planning.")
 app.add_typer(exp_app, name="exp")
 app.add_typer(task_app, name="task")
+app.add_typer(session_app, name="session")
 
 
 @app.command("init")
@@ -102,6 +107,38 @@ def sync_cmd(
 @app.command("status")
 def status_cmd() -> None:
     show_status()
+
+
+@app.command("resume")
+def resume_cmd() -> None:
+    resume_session()
+
+
+@app.command("install")
+def install_cmd(
+    runtime: Annotated[
+        str, typer.Option("--runtime", help="Comma-separated runtimes: claude, codex.")
+    ] = "claude,codex",
+    home: Annotated[
+        Path | None,
+        typer.Option("--home", help="Base dir containing .claude/.codex (default: your home)."),
+    ] = None,
+    force: Annotated[bool, typer.Option("--force", help="Overwrite managed files.")] = False,
+) -> None:
+    install_runtimes(runtime=runtime, home=home, force=force)
+
+
+@app.command("uninstall")
+def uninstall_cmd(
+    runtime: Annotated[
+        str, typer.Option("--runtime", help="Comma-separated runtimes: claude, codex.")
+    ] = "claude,codex",
+    home: Annotated[
+        Path | None,
+        typer.Option("--home", help="Base dir containing .claude/.codex (default: your home)."),
+    ] = None,
+) -> None:
+    uninstall_runtimes(runtime=runtime, home=home)
 
 
 if __name__ == "__main__":

@@ -35,6 +35,9 @@ octopus context   # build smart .octopus/context/current_context.md
 octopus exp       # init, log, ingest, analyze, profile, next, compare, and report experiments
 octopus sync      # refresh CLAUDE.md and/or AGENTS.md
 octopus status    # show project snapshot
+octopus session   # short-term in-session memory (start, show, log, end)
+octopus resume    # restore working context after a reset
+octopus install   # embed Octopus commands/agents/hook into Claude Code & Codex
 ```
 
 `octopus --help` lists the full Phase 1 command surface.
@@ -188,6 +191,40 @@ dependency). TensorBoard event files need the optional `tensorboard` package;
 without it, ingest reports a clear install hint. Detected runs are tagged with
 their source (for example `source:mlflow`). Explicit `--metrics` / `--report`
 files always take precedence over tracker values.
+
+## Runtime Integration (Claude Code & Codex)
+
+`octopus install` embeds Octopus into your AI runtimes so you are steered into the
+baseline-first workflow with a small token surface:
+
+```bash
+octopus install --runtime claude,codex     # install into ~/.claude and ~/.codex
+octopus install --runtime claude --home /tmp/sandbox   # install into a custom base
+octopus uninstall --runtime claude,codex   # clean removal (manifest-driven)
+```
+
+It writes thin command routers (`/octopus-plan`, `/octopus-train`, `/octopus-tune`,
+`/octopus-status`, `/octopus-resume`), Claude subagents
+(`octopus-baseline-runner`, `octopus-experiment-analyst`, `octopus-tuner`,
+`octopus-data-auditor`, `octopus-rag-evaluator`), and a Claude `PreToolUse`
+**baseline-guard** hook that blocks main-model training before a baseline exists.
+Existing `settings.json` is preserved; the hook is idempotent.
+
+## Session Memory
+
+`octopus session` keeps short-term, in-session memory in `.octopus/session/` so a
+runtime can be restored after a context reset. It auto-captures from the workflow
+(`task start`, `exp choose`, `exp ingest`):
+
+```bash
+octopus session start --goal "beat the TF-IDF baseline"
+octopus session show
+octopus resume          # summary + which restore files exist
+octopus session end
+```
+
+This is distinct from `.octopus/memory/` (long-term experiment archive): the
+session is RAM, memory is history.
 
 ## Development
 

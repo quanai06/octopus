@@ -39,20 +39,24 @@ upper layers (commands, agents, installer, hooks) get added on top.
 - [x] `tests/benchmark/` — promoted the ad-hoc Phase 2 eval into a repeatable
       pytest suite (4 scenarios x flow/artifacts/token-savings). 71 tests pass.
 
-### Phase 3 — Installer + Command layer  (next)
-- `octopus install --runtime claude,codex`: write slash-command routers into
-  `~/.claude/commands` and `~/.codex`, plus agent defs and hooks.
-- Thin command routers (low token surface): `/octopus-plan`, `/octopus-train`,
-  `/octopus-tune`, `/octopus-resume`.
-- Hook `baseline-guard`: block main-model edits/training before a baseline.
-- Multi-runtime projection (namespace + tool-name + path differences).
+### Phase 3 — Installer + Command layer  ✅ DONE
+- [x] `octopus install / uninstall --runtime claude,codex [--home]` — `install/`
+      package (layout, artifacts, installer, hooks). Routers into
+      `~/.claude/commands` and `~/.codex/prompts`; manifest-driven uninstall.
+- [x] Thin command routers: `/octopus-plan`, `/octopus-train`, `/octopus-tune`,
+      `/octopus-status` (+ `/octopus-resume` from Phase 4).
+- [x] Claude `PreToolUse` baseline-guard hook (`octopus.install.hooks`) blocking
+      main-model training before a baseline; idempotent settings.json merge.
+      (doc: `phase_3.md`, tests: `test_phase_3_install.py`)
 
-### Phase 4 — Session memory + Agents
-- `.octopus/session/<id>.md`: short-term RAM for the active session (current
-  task, selected direction, last ingested run, in-session decisions).
-- `/octopus-resume` reads session + `.octopus/memory/` after context reset.
-- Agent definitions: `octopus-baseline-runner`, `octopus-experiment-analyst`,
-  `octopus-tuner`, `octopus-data-auditor`, `octopus-rag-evaluator`.
+### Phase 4 — Session memory + Agents  ✅ DONE
+- [x] `.octopus/session/` short-term memory (`storage/session_store.py`,
+      `SessionState`): `octopus session start|show|log|end`, `octopus resume`,
+      `/octopus-resume` router, best-effort auto-capture from task/exp commands.
+- [x] Five Claude subagents installed to `~/.claude/agents/`:
+      `octopus-baseline-runner`, `octopus-experiment-analyst`, `octopus-tuner`,
+      `octopus-data-auditor`, `octopus-rag-evaluator`.
+      (doc: `phase_4.md`, tests: `test_phase_4_session.py`)
 
 ### Phase 5 — Baseline intelligence  ✅ DONE
 - [x] Symptom -> technique library (`experiments/technique_library.py`):

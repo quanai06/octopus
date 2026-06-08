@@ -8,6 +8,7 @@ from octopus.core.files import atomic_write_text
 from octopus.core.guards import require_complete_state
 from octopus.core.paths import TASKS_MD
 from octopus.core.workflow import has_completed_baseline, requires_baseline_gate
+from octopus.storage.session_store import record_if_active
 from octopus.storage.state_store import load_state
 from octopus.storage.task_store import (
     blocked_dependencies,
@@ -98,6 +99,9 @@ def start_task(
     task.status = "in_progress"
     save_tasks(tasks)
     _write_task_view()
+    record_if_active(
+        "task", f"Started {task.id}: {task.title}", current_task=f"{task.id} {task.title}"
+    )
     console.print(f"[green]Task started:[/green] {task.id} {task.title}")
 
 

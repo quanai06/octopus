@@ -169,6 +169,24 @@ class SelectedDirection(BaseModel):
     status: Literal["selected", "completed", "abandoned"] = "selected"
 
 
+class SessionEvent(BaseModel):
+    timestamp: str
+    kind: Literal["note", "task", "direction", "run", "decision"] = "note"
+    message: str
+
+
+class SessionState(BaseModel):
+    session_id: str
+    started_at: str
+    updated_at: str
+    status: Literal["active", "ended"] = "active"
+    goal: str | None = None
+    current_task: str | None = None
+    selected_direction: str | None = None
+    last_run: str | None = None
+    events: list[SessionEvent] = Field(default_factory=list)
+
+
 class TechniqueSuggestion(BaseModel):
     technique_id: str
     name: str

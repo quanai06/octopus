@@ -21,6 +21,9 @@ NEXT_STEPS_MD = PLANS_DIR / "next_steps.md"
 NEXT_STEPS_YAML = PLANS_DIR / "next_steps.yaml"
 SELECTED_DIRECTION_YAML = PLANS_DIR / "selected_direction.yaml"
 ADR_DIR = OCTOPUS_DIR / "adr"
+SESSION_DIR = OCTOPUS_DIR / "session"
+SESSION_STATE = SESSION_DIR / "current.json"
+SESSION_MD = SESSION_DIR / "current.md"
 
 REQUIREMENTS_MD = Path("requirements.md")
 ML_DESIGN_MD = Path("ml_design.md")

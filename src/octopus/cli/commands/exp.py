@@ -43,6 +43,7 @@ from octopus.storage.experiment_store import (
     next_legacy_experiment_id,
     save_experiment,
 )
+from octopus.storage.session_store import record_if_active
 from octopus.storage.state_store import load_state, state_exists
 from octopus.storage.task_store import ensure_tasks, mark_baseline_tasks_done, render_tasks_markdown
 
@@ -360,6 +361,7 @@ def ingest_experiment(
         raise typer.Exit(1) from exc
 
     main_metric = _default_metric([record])
+    record_if_active("run", f"Ingested {record.id} ({record.kind})", last_run=record.id)
     console.print(f"[green]Experiment ingested: {record.id}[/green]")
     console.print(f"Name: {record.name}")
     console.print(f"Kind: {record.kind}")
@@ -467,6 +469,11 @@ def choose_next_direction(
         console.print(f"[red]Direction not found: {exc}[/red]")
         console.print("Run: octopus exp next")
         raise typer.Exit(1) from exc
+    record_if_active(
+        "direction",
+        f"Selected direction {selected.selected_direction_id}",
+        selected_direction=selected.selected_direction_id,
+    )
     console.print("[green]Direction selected.[/green]\n")
     console.print(f"  Direction: {selected.selected_direction_id}")
     console.print(f"  Output:    {selected.source_plan}")
