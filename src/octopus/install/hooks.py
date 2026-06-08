@@ -20,13 +20,14 @@ import sys
 
 # Commands that look like launching a training run.
 _TRAIN_PATTERNS = (
-    r"train\.py",
+    r"train[\w-]*\.py",  # train.py, train_phobert.py, train-model.py, src/train.py
     r"\btrainer\b",
     r"\.fit\(",
     r"accelerate\s+launch",
     r"torchrun",
+    r"deepspeed\s",
     r"python\s+-m\s+\S*train",
-    r"\bfine[-_]?tune\b",
+    r"\bfine[-_]?tun",  # finetune, fine-tune, finetuning, finetune_x.py
 )
 
 

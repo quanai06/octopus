@@ -1,6 +1,9 @@
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 
+import yaml  # type: ignore[import-untyped]
+from pydantic import ValidationError
 from rich.console import Console
 from rich.panel import Panel
 
@@ -114,6 +117,58 @@ def _float_or_none(value: str | None) -> float | None:
 def baseline_choices_for_task(task_type: str | None) -> list[str]:
     rules = rules_for_task(task_type if task_type != "rag" else "rag")
     return list(rules.baseline_models)
+
+
+def ask_from_file(source: Path) -> None:
+    """Non-interactive intake from a YAML/JSON answers file.
+
+    Lets an agent (or headless run) set up project state without a TTY, so
+    `/octopus-baseline` and the eval harness can run end to end. Values merge
+    onto existing state; `compute` is merged as a nested mapping.
+    """
+    require_init()
+    if not source.exists():
+        console.print(f"[red]Answers file not found: {source}[/red]")
+        raise SystemExit(1)
+    try:
+        data = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        console.print(f"[red]Could not parse answers file: {exc}[/red]")
+        raise SystemExit(1) from exc
+    if not isinstance(data, dict):
+        console.print("[red]Answers file must be a mapping of field: value.[/red]")
+        raise SystemExit(1)
+
+    base = (load_state() if state_exists() else ProjectState()).model_dump(mode="json")
+    compute = {**base.get("compute", {}), **(data.pop("compute", None) or {})}
+    base.update(data)
+    base["compute"] = compute
+    now = datetime.now(UTC)
+    base["last_updated"] = now.isoformat()
+    try:
+        state = ProjectState.model_validate(base)
+    except ValidationError as exc:
+        console.print("[red]Answers file produced invalid project state:[/red]")
+        console.print(str(exc))
+        raise SystemExit(1) from exc
+
+    save_state(state)
+    try:
+        touch_config()
+    except FileNotFoundError:
+        save_config(
+            {
+                "version": "0.1.0",
+                "runtime": state.runtime,
+                "created_at": now.isoformat(),
+                "last_updated": now.isoformat(),
+            }
+        )
+    console.print("[green]Project state saved (non-interactive).[/green]\n")
+    console.print(f"  Project: {state.project_name or 'unnamed'}")
+    console.print(f"  Type:    {state.task_type or state.project_type}")
+    console.print(f"  Metric:  {state.main_metric or 'not set'}")
+    console.print(f"  Runtime: {', '.join(state.runtime) or 'none'}")
 
 
 def ask_requirements(reset: bool = False) -> None:

@@ -42,6 +42,10 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# Runnable benchmark scripts adjust sys.path before importing octopus.
+"tests/benchmark/token_eval_*.py" = ["E402"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

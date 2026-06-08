@@ -37,7 +37,6 @@ from octopus.context.token_estimator import ENCODING, estimate_tokens
 from octopus.core.schemas import ComputeConfig, ProjectState
 from octopus.storage.state_store import save_state
 
-
 PLANNING_DOCS = [
     "requirements.md",
     "ml_design.md",
@@ -488,7 +487,9 @@ def _render_octopus_project(project_dir: Path, scenario: Scenario) -> tuple[int,
             generate_plan(force=True)
             generate_ml_plan(force=True)
             generate_tasks(force=True)
-            build_current_context(task="write baseline plan and script skeleton", profile="training")
+            build_current_context(
+                task="write baseline plan and script skeleton", profile="training"
+            )
 
         manual_docs_tokens = sum(
             estimate_tokens(Path(doc).read_text(encoding="utf-8"))

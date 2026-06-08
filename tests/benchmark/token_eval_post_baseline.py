@@ -57,7 +57,6 @@ from tests.benchmark.token_eval_datasets import (
     build_scenarios,
 )
 
-
 STACKING_PROMPT = (
     "The baseline is already logged. Plan the next upgrade: evaluate several candidate "
     "models and build a stacking ensemble only with out-of-fold predictions. Do not train "
@@ -178,7 +177,10 @@ def _stacking_direction(scenario: Scenario) -> NextDirection:
 
 def _write_next_direction(direction: NextDirection) -> None:
     NEXT_STEPS_YAML.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"source": "post-baseline stacking benchmark", "directions": [direction.model_dump(mode="json")]}
+    payload = {
+        "source": "post-baseline stacking benchmark",
+        "directions": [direction.model_dump(mode="json")],
+    }
     atomic_write_text(NEXT_STEPS_YAML, yaml.safe_dump(payload, sort_keys=False))
     atomic_write_text(
         NEXT_STEPS_MD,
@@ -251,7 +253,7 @@ def _write_code_context(scenario: Scenario) -> list[str]:
 
 def _deliverable(scenario: Scenario) -> tuple[str, str]:
     if scenario.key == "RAG":
-        plan = f"""# Post-Baseline Upgrade Plan - WikiQA Retriever Fusion
+        plan = """# Post-Baseline Upgrade Plan - WikiQA Retriever Fusion
 
 Baseline: BM25 is logged as `E001`.
 
@@ -344,7 +346,9 @@ def _setup_project(project_dir: Path, scenario: Scenario) -> tuple[int, int, int
             generate_plan(force=True)
             generate_ml_plan(force=True)
             generate_tasks(force=True)
-            build_current_context(task="write baseline plan and script skeleton", profile="training")
+            build_current_context(
+                task="write baseline plan and script skeleton", profile="training"
+            )
             save_experiment(_baseline_record(scenario))
             write_baseline_profile_md(profile_baseline("E001"))
         _write_code_context(scenario)
@@ -416,7 +420,8 @@ def format_markdown(rows: list[PostBaselineRow]) -> str:
     lines = [
         f"Tokenizer: `{ENCODING}`",
         "",
-        "| Scenario | A prompt-only input | B Octopus direction input | Saving % | Upgrade plan+script output |",
+        "| Scenario | A prompt-only input | B Octopus direction input | "
+        "Saving % | Upgrade plan+script output |",
         "|---|---:|---:|---:|---:|",
     ]
     for row in rows:

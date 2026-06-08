@@ -17,8 +17,12 @@ def test_install_writes_claude_commands_and_hook(tmp_path):
     results = install(["claude"], home=tmp_path)
 
     commands = tmp_path / ".claude" / "commands"
+    assert (commands / "octopus-baseline.md").exists()
     assert (commands / "octopus-train.md").exists()
     assert (commands / "octopus-tune.md").exists()
+    baseline = (commands / "octopus-baseline.md").read_text(encoding="utf-8")
+    assert "octopus init --runtime claude,codex" in baseline
+    assert "octopus context --task" in baseline
     content = (commands / "octopus-train.md").read_text(encoding="utf-8")
     assert content.startswith("---")
     assert "baseline-first" in content.lower()
@@ -32,7 +36,11 @@ def test_install_writes_claude_commands_and_hook(tmp_path):
 def test_install_writes_codex_prompts(tmp_path):
     install(["codex"], home=tmp_path)
     prompts = tmp_path / ".codex" / "prompts"
+    assert (prompts / "octopus-baseline.md").exists()
     assert (prompts / "octopus-plan.md").exists()
+    assert "One-shot Octopus setup" in (prompts / "octopus-baseline.md").read_text(
+        encoding="utf-8"
+    )
     # Codex prompts are plain markdown (no Claude frontmatter block).
     assert not (prompts / "octopus-plan.md").read_text(encoding="utf-8").startswith("---")
 
@@ -65,7 +73,9 @@ def test_uninstall_removes_files_and_hook(tmp_path):
     uninstall(["claude", "codex"], home=tmp_path)
 
     assert not (tmp_path / ".claude" / "commands" / "octopus-train.md").exists()
+    assert not (tmp_path / ".claude" / "commands" / "octopus-baseline.md").exists()
     assert not (tmp_path / ".codex" / "prompts" / "octopus-plan.md").exists()
+    assert not (tmp_path / ".codex" / "prompts" / "octopus-baseline.md").exists()
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert "PreToolUse" not in settings.get("hooks", {})
 
@@ -104,6 +114,40 @@ def test_baseline_guard_ignores_non_training_commands(tmp_project):
 def test_baseline_guard_ignores_when_no_project(tmp_project):
     # No .octopus state -> hook must not block.
     assert baseline_guard(_train_payload()) == 0
+
+
+def _cmd(command: str) -> str:
+    return json.dumps({"tool_input": {"command": command}})
+
+
+def test_baseline_guard_blocks_custom_script_names(tmp_project):
+    # Regression for the regex gap found in the Claude Code eval run:
+    # custom training/fine-tune script names must also be blocked pre-baseline.
+    runner.invoke(app, ["init", "--force"])
+    write_state(sample_ml_state())
+    for command in (
+        "python train_phobert.py --model vinai/phobert-base",
+        "python train-model.py",
+        "python src/train.py",
+        "python finetune_phobert.py",
+        "python fine_tune.py",
+        "accelerate launch train.py",
+        "torchrun train.py",
+        "deepspeed train.py",
+    ):
+        assert baseline_guard(_cmd(command)) == 2, f"should block: {command}"
+
+
+def test_baseline_guard_allows_non_training_lookalikes(tmp_project):
+    runner.invoke(app, ["init", "--force"])
+    write_state(sample_ml_state())
+    for command in (
+        "python baseline_skeleton.py",
+        "python preprocess.py",
+        "python evaluate.py",
+        "python tests/datasets/inspect.py",
+    ):
+        assert baseline_guard(_cmd(command)) == 0, f"should allow: {command}"
 
 
 # --- CLI surface -----------------------------------------------------------

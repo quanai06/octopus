@@ -29,5 +29,5 @@ def save_config(config: dict[str, Any]) -> None:
 
 def touch_config() -> None:
     config = load_config()
-    config["last_updated"] = datetime.utcnow().isoformat(timespec="seconds")
+    config["last_updated"] = datetime.now(UTC).isoformat(timespec="seconds")
     save_config(config)

@@ -34,6 +34,32 @@ COMMAND_ROUTERS: tuple[CommandRouter, ...] = (
         ),
     ),
     CommandRouter(
+        name="octopus-baseline",
+        description="One-shot Octopus setup for the first baseline task.",
+        body=(
+            "Set up the project and prepare the first baseline task with minimal user "
+            "hand-holding.\n\n"
+            "1. If `.octopus/` does not exist, run `octopus init --runtime claude,codex`.\n"
+            "2. Run `octopus status` to inspect existing state. If project details are "
+            "missing, gather them from the user, write them to `answers.yaml`, and run "
+            "`octopus ask --from answers.yaml` (non-interactive; do NOT run bare "
+            "`octopus ask`, which needs a TTY). If usable requirements already exist, "
+            "continue without re-asking.\n"
+            "3. Run `octopus plan --force`, `octopus ml-plan --force`, and "
+            "`octopus tasks --force`.\n"
+            "4. Run `octopus task next`. If the next unblocked task is not a baseline task, "
+            "still keep the workflow baseline-first and do not start main-model work.\n"
+            "5. Run `octopus context --task \"train the baseline\" --profile training`.\n"
+            "6. Read `.octopus/context/current_context.md` and produce the baseline plan "
+            "plus baseline training-script skeleton. Stop before training unless the user "
+            "explicitly asks to run the baseline.\n\n"
+            "Rules: never skip the baseline, never tune on the test set, never change the "
+            "train/validation/test split unless Octopus explicitly selected that direction, "
+            "and after a real run ingest it with `octopus exp ingest --run-dir <run_dir> "
+            "--kind baseline`."
+        ),
+    ),
+    CommandRouter(
         name="octopus-train",
         description="Run the Octopus baseline-first training loop.",
         body=(

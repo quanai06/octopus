@@ -49,7 +49,7 @@ References:
 
 ```bash
 octopus init      # create .octopus/ plus planning files
-octopus ask       # interactive requirement intake
+octopus ask       # requirement intake (interactive, or --from answers.yaml for headless)
 octopus plan      # render requirements.md
 octopus ml-plan   # render ML design, data, compute, and experiment plans
 octopus tasks     # render tasks.md
@@ -61,6 +61,7 @@ octopus status    # show project snapshot
 octopus session   # short-term in-session memory (start, show, log, end)
 octopus resume    # restore working context after a reset
 octopus install   # embed Octopus commands/agents/hook into Claude Code & Codex
+octopus uninstall # remove installed artifacts (manifest-driven)
 ```
 
 `octopus --help` lists the full Phase 1 command surface.
@@ -115,6 +116,7 @@ octopus install --runtime codex
 This writes managed markdown prompts under `~/.codex/prompts/`:
 
 ```text
+octopus-baseline.md
 octopus-plan.md
 octopus-train.md
 octopus-tune.md
@@ -122,7 +124,25 @@ octopus-status.md
 octopus-resume.md
 ```
 
-Recommended Codex loop:
+Fast baseline setup:
+
+```bash
+octopus install --runtime codex
+codex
+```
+
+Then tell Codex:
+
+```text
+octopus-baseline
+```
+
+The installed prompt tells Codex to initialize Octopus if needed, collect missing
+requirements, render planning files, create tasks, build
+`.octopus/context/current_context.md`, and stop at the baseline plan/script
+skeleton unless you explicitly ask it to train.
+
+Manual Codex loop:
 
 ```bash
 octopus init --runtime codex
@@ -165,6 +185,7 @@ octopus install --runtime claude
 This writes managed files under `~/.claude/`:
 
 ```text
+commands/octopus-baseline.md
 commands/octopus-plan.md
 commands/octopus-train.md
 commands/octopus-tune.md
@@ -178,7 +199,24 @@ agents/octopus-rag-evaluator.md
 settings.json  # merged PreToolUse baseline-guard hook
 ```
 
-Recommended Claude Code loop:
+Fast baseline setup:
+
+```bash
+octopus install --runtime claude
+claude
+```
+
+Inside Claude Code:
+
+```text
+/octopus-baseline
+```
+
+The slash command follows the same setup path as Codex: initialize when needed,
+ask only for missing project facts, render plans/tasks, build context, then
+prepare the first baseline deliverable.
+
+Manual Claude Code loop:
 
 ```bash
 octopus init --runtime claude
@@ -193,6 +231,7 @@ claude
 Inside Claude Code, use the installed slash commands:
 
 ```text
+/octopus-baseline
 /octopus-plan
 /octopus-train
 /octopus-tune
@@ -332,12 +371,25 @@ octopus install --runtime claude --home /tmp/sandbox   # install into a custom b
 octopus uninstall --runtime claude,codex   # clean removal (manifest-driven)
 ```
 
-It writes thin command routers (`/octopus-plan`, `/octopus-train`, `/octopus-tune`,
-`/octopus-status`, `/octopus-resume`), Claude subagents
+It writes thin command routers (`/octopus-baseline`, `/octopus-plan`,
+`/octopus-train`, `/octopus-tune`, `/octopus-status`, `/octopus-resume`), Claude subagents
 (`octopus-baseline-runner`, `octopus-experiment-analyst`, `octopus-tuner`,
 `octopus-data-auditor`, `octopus-rag-evaluator`), and a Claude `PreToolUse`
 **baseline-guard** hook that blocks main-model training before a baseline exists.
 Existing `settings.json` is preserved; the hook is idempotent.
+
+### Non-interactive setup (headless / agent-driven)
+
+`octopus ask` is interactive. For headless runs (an agent's Bash tool, CI, the
+benchmark) seed project state from a file instead — no TTY needed:
+
+```bash
+octopus ask --from answers.yaml   # YAML/JSON mapping of fields; merges onto state
+```
+
+`/octopus-baseline` uses this path: it gathers answers, writes `answers.yaml`,
+runs `octopus ask --from answers.yaml`, then `plan/ml-plan/tasks --force`, so the
+whole setup-to-baseline flow works without a human at the prompt.
 
 ## Session Memory
 
@@ -362,6 +414,16 @@ Benchmarks are deterministic local token measurements. They use Octopus'
 models. Live Codex/Claude Code token usage should still be measured separately
 with fresh sessions if you want runtime billing/compliance numbers.
 
+**Important — what this measures.** These harnesses are deterministic Python
+scripts: they call Octopus' own functions and tokenize the resulting files. The
+launching agent (Codex, Claude Code, or a plain `python` command) makes no
+decisions, so the numbers are **agent-independent by construction**. Both Codex
+and Claude Code produce the *same* numbers — that is expected, and it says
+**nothing about baseline code quality**. It only shows how much context Octopus
+saves vs pasting docs by hand. The agent-dependent signals (live token usage and
+the quality/compliance of the code each agent writes) are NOT measured here — see
+[What this benchmark does not measure](#what-this-benchmark-does-not-measure).
+
 ### Benchmark 1: Baseline Plan + Script Skeleton
 
 Command:
@@ -384,7 +446,8 @@ Measurement:
 - Branch B = Octopus prompt + `.octopus/context/current_context.md`.
 - Output = deterministic `baseline_plan.md` + `baseline_script_skeleton.py`.
 
-Latest local result:
+Result (deterministic — same whoever launches it; verified via Codex and Claude
+Code, 2026-06-08):
 
 | Scenario | A prompt-only input | B Octopus input | Saving | Output plan+script |
 |---|---:|---:|---:|---:|
@@ -421,7 +484,8 @@ Measurement:
   baseline profile, next-step docs, and relevant code snippets.
 - Branch B = Octopus prompt + selected direction context.
 
-Latest local result:
+Result (deterministic — same whoever launches it; verified via Codex and Claude
+Code, 2026-06-08):
 
 | Scenario | A prompt-only input | B Octopus direction input | Saving | Output plan+script |
 |---|---:|---:|---:|---:|
@@ -440,6 +504,41 @@ Stacking guardrails used in the benchmark:
 - Fit the meta-model only on out-of-fold or validation predictions.
 - Do not tune on the test set.
 - For RAG, evaluate retrieval before generation.
+
+### What this benchmark does not measure
+
+The tables above are **agent-independent**: the harness is a fixed script that
+tokenizes files, so Codex and Claude Code get identical numbers. That is the
+expected, correct result of a deterministic measurement — it is **not** a signal
+about the quality of the code an agent writes.
+
+The agent-dependent metrics are NOT auto-generated; they require actually running
+each agent live, in its own fresh session, on the same fixed task (see
+`eval_token_and_compliance.md` for the protocol and the /7 compliance rubric):
+
+- **Live token usage** — input/output/total from each agent's own counter.
+- **Output quality + compliance** — does the produced baseline plan/script run,
+  use the correct split, stay baseline-first, report the right metrics, check for
+  leakage, and avoid test-set tuning?
+
+Measured per agent (live tokens require the runtime's own counter; compliance is
+the /7 rubric scored against the real produced artifacts):
+
+| Agent | Scenario | Live total tokens | Quality/compliance (/7) |
+|---|---|---:|---:|
+| Claude Code | ML | n/a¹ | 7/7 |
+| Claude Code | DL | n/a¹ | 7/7 |
+| Claude Code | RAG | n/a¹ | 7/7 |
+| Codex | ML / DL / RAG | _run it_ | _score it_ |
+
+¹ An agent cannot read its own token counter mid-run; measure live tokens from the
+runtime's usage report in a fresh session.
+
+Claude Code's run is auditable: the real baseline plans + script skeletons it
+produced are in `tests/benchmark/claude_code_run/{ml,dl,rag}/`, and the scored
+rubric (with evidence and one honest limitation found in the baseline-guard regex)
+is in `tests/benchmark/claude_code_run/RESULT.md`. The Codex row is left for a
+separate Codex run.
 
 ## Development
 

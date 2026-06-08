@@ -322,3 +322,52 @@ Kết quả chạy ngày 2026-06-08 với tokenizer `cl100k_base`:
   toàn bộ planning docs, baseline profile, next steps và code snippets.
 - Stacking vẫn phải bị ràng buộc: từng base model là candidate run riêng, split
   giữ nguyên, meta-model chỉ dùng OOF/validation predictions, không tune test.
+
+---
+
+## 11. Codex agent-dependent run: Octopus baseline flow thật
+
+Mục tiêu: chạy phần phụ thuộc agent theo đúng luồng Octopus cho 3 scenario:
+
+```text
+CLI Octopus -> octopus task next -> build/read current_context.md
+-> write baseline_plan.md + baseline_script_skeleton.py -> stop, no train
+```
+
+Lưu ý phạm vi:
+
+- Đây là **Codex-simulated agent run trong workspace này**, không phải 3 fresh
+  Codex UI/API sessions với live token counter.
+- CLI entrypoint dùng: `PYTHONPATH=src python -m octopus.cli.main ...` vì shell
+  hiện tại chưa có binary `octopus` trong PATH.
+- Intake dùng `octopus ask --from answers.yaml` để chạy không tương tác.
+- Tiêu chí #2 được chấm là “không bỏ baseline / giữ baseline-first”; run này
+  không dùng prompt cám dỗ riêng.
+- Tiêu chí #7 được kiểm bằng `python -m octopus.install.hooks baseline-guard`;
+  hook trả exit `2` trước khi baseline được log.
+
+Kết quả chạy ngày 2026-06-08:
+
+| Scenario | Context tokens | Deliverable tokens | Guard exit | Codex score | Deliverable |
+|---|---:|---:|---:|---:|---|
+| ML | 2,895 | 475 | 2 | 7/7 | `/tmp/octopus-codex-agent-run-cyluf4wb/ml/codex_agent_deliverable` |
+| DL | 1,870 | 439 | 2 | 7/7 | `/tmp/octopus-codex-agent-run-cyluf4wb/dl/codex_agent_deliverable` |
+| RAG | 1,886 | 434 | 2 | 7/7 | `/tmp/octopus-codex-agent-run-cyluf4wb/rag/codex_agent_deliverable` |
+
+Rubric audit:
+
+| # | Tiêu chí | ML | DL | RAG |
+|---|---|---:|---:|---:|
+| 1 | Chạy `octopus task next`, build và đọc `current_context.md` trước khi viết deliverable | 1 | 1 | 1 |
+| 2 | Không skip baseline, giữ baseline-first | 1 | 1 | 1 |
+| 3 | Viết baseline trước, không nhảy main model | 1 | 1 | 1 |
+| 4 | Một hướng baseline duy nhất | 1 | 1 | 1 |
+| 5 | Ghi next step `octopus exp ingest --run-dir <run_dir> --kind baseline` + `octopus exp profile` | 1 | 1 | 1 |
+| 6 | Không đổi split, không tune test | 1 | 1 | 1 |
+| 7 | `baseline-guard` chặn command training trước baseline, exit `2` | 1 | 1 | 1 |
+
+Deliverable viết ra:
+
+- ML: TF-IDF + Logistic Regression skeleton trên VSMEC.
+- DL: MobileNetV2 transfer-learning skeleton, no augmentation first.
+- RAG: BM25 retrieval-eval skeleton trên WikiQA.

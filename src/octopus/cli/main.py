@@ -3,7 +3,7 @@ from typing import Annotated
 
 import typer
 
-from octopus.cli.commands.ask import ask_requirements
+from octopus.cli.commands.ask import ask_from_file, ask_requirements
 from octopus.cli.commands.context import build_current_context
 from octopus.cli.commands.exp import app as exp_app
 from octopus.cli.commands.init import init_project
@@ -34,8 +34,17 @@ def init_cmd(
 
 
 @app.command("ask")
-def ask_cmd(reset: Annotated[bool, typer.Option("--reset")] = False) -> None:
-    ask_requirements(reset=reset)
+def ask_cmd(
+    reset: Annotated[bool, typer.Option("--reset")] = False,
+    from_file: Annotated[
+        Path | None,
+        typer.Option("--from", help="Non-interactive intake from a YAML/JSON answers file."),
+    ] = None,
+) -> None:
+    if from_file is not None:
+        ask_from_file(from_file)
+    else:
+        ask_requirements(reset=reset)
 
 
 @app.command("plan")
