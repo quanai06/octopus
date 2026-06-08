@@ -11,16 +11,24 @@ Improve {{ main_metric }} for {{ project_goal or "the target machine learning ta
 ## Baseline
 
 - Model: {{ baseline_models[0] }}
-- Metric: {{ main_metric }}
-- Dataset: frozen train / validation / test split
+- Metric: {{ main_metric }} (report mean ± std across CV folds)
+- Validation: cross-validated per the Evaluation Protocol in `data_strategy.md`
+- Dataset: held-out test set frozen; model selection on cross-validation folds
 - Status: not started
+
+### Standard Evaluation Protocol
+
+{% for step in evaluation_protocol %}
+- {{ step }}
+{% endfor %}
 
 ## Experiment Queue
 
 ### Experiment 1: Classical baseline
 
 - Model: {{ baseline_models[0] }}
-- Metric: {{ main_metric }}
+- Metric: {{ main_metric }} (mean ± std across k folds)
+- Validation: k-fold cross-validation with a fixed seed; preprocessing fit per fold
 - Depends on: data split and label audit
 - Expected risk: weak representation but useful sanity check
 - Status: todo

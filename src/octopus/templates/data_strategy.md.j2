@@ -19,12 +19,14 @@
 - Language: {{ language }}
 {% endif %}
 
-## Split Strategy
+## Split & Cross-Validation
 
-- Use train / validation / test split before model selection.
-- Keep the test set untouched until final validation.
-- Use stratified split for classification tasks when labels are available.
-- Store the split seed and split file paths in experiment logs.
+The baseline is a full train/eval protocol, not a single random holdout:
+
+{% for step in evaluation_protocol %}
+- {{ step }}
+{% endfor %}
+- Store the CV scheme, fold seed, and split file paths in experiment logs.
 
 ## Quality Checks
 

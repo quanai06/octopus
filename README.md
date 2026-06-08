@@ -405,6 +405,26 @@ For ML/DL/RAG projects, Octopus enforces these rules:
 Logging or ingesting a completed baseline marks `T010`, `T011`, and `T012` done,
 then unblocks `T020`.
 
+### What "baseline" means here
+
+The baseline is a **full, data-type-aware train/eval protocol** — not a single
+random split. `octopus ml-plan` renders a "Split & Cross-Validation" section in
+`data_strategy.md` and `experiment_plan.md`, chosen by task type:
+
+| Task | Split + CV |
+|---|---|
+| text / image classification | StratifiedKFold(k=5) + per-class recall, mean ± std; StratifiedGroupKFold if rows share a group; for deep models use ≥3 seeds when k-fold is too costly |
+| regression (tabular) | KFold(k=5); GroupKFold if rows share an entity; TimeSeriesSplit if the target is time-ordered |
+| forecasting | TimeSeriesSplit (expanding/rolling), never shuffle, lag features computed inside each fold, compared to a naive baseline |
+| retrieval / RAG | fixed labeled query eval set; Recall@k / MRR / source-hit; k-fold or fixed dev/test over queries; never tune on test queries |
+| recommendation | time-aware split on future interactions; guard cold-start and leakage |
+| other | default: held-out test + k-fold (fold scheme chosen to match the data) |
+
+Across all of them: preprocessing is fit **inside each fold** (leakage-safe), the
+held-out test set stays untouched until final reporting, and the main metric is
+reported as **mean ± std across folds**. The model can be simple; the *protocol*
+is rigorous.
+
 Example:
 
 ```bash

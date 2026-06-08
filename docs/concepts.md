@@ -18,6 +18,19 @@ work.** Octopus enforces this, not just suggests it:
 Logging/ingesting a completed baseline marks `T010`/`T011`/`T012` done and
 unblocks `T020`.
 
+The baseline is a **full, data-type-aware train/eval protocol**, not a single
+random holdout. `octopus ml-plan` renders a "Split & Cross-Validation" section
+(in `data_strategy.md` and `experiment_plan.md`) chosen by task type:
+
+- classification → **StratifiedKFold** (k=5), report mean ± std + per-class recall;
+- tabular regression → **KFold** (GroupKFold when rows share an entity);
+- forecasting / time-ordered → **TimeSeriesSplit** (temporal, never shuffle);
+- retrieval / RAG → **fixed labeled query eval set**, Recall@k / MRR / source-hit;
+- recommendation → **time-aware split** on future interactions.
+
+Preprocessing is fit inside each fold (leakage-safe), the held-out test set stays
+untouched, and metrics are reported as mean ± std across folds.
+
 ## `.octopus/` is the source of truth
 
 All state lives in `.octopus/` as YAML/JSON, with human-readable Markdown *views*

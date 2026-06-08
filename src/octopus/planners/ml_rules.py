@@ -176,3 +176,71 @@ def rules_for_task(task_type: str | None) -> MlPlanRules:
     if not task_type:
         return GENERIC_RULES
     return RULE_MAP.get(task_type, GENERIC_RULES)
+
+
+# Data-type-aware standard train/eval protocol for the baseline. The point is a
+# *rigorous* baseline (correct split + cross-validation + leakage-safe
+# preprocessing + variance reporting), not a single random holdout.
+_CLASSIFICATION_PROTOCOL = (
+    "Hold out a stratified test set first; keep it untouched until final reporting.",
+    "Use StratifiedKFold (k=5, fixed seed) on the train+validation pool for model selection.",
+    "Report mean ± std of macro_f1 and per-class recall across folds, not a single split.",
+    "Fit all preprocessing (vectorizer/scaler/encoder) inside each fold on train folds only.",
+    "If samples share a group/author/source, use StratifiedGroupKFold to avoid leakage.",
+    "For deep models where k-fold is too costly, use a fixed stratified split with >=3 seeds "
+    "and still report mean ± std.",
+)
+_REGRESSION_PROTOCOL = (
+    "Hold out a test set; never tune on it.",
+    "Use KFold (k=5, fixed seed) for model selection; GroupKFold if rows share an entity.",
+    "If the target is time-ordered, use a temporal split / TimeSeriesSplit, not random KFold.",
+    "Report mean ± std of RMSE/MAE across folds and inspect residuals by segment.",
+    "Fit scalers/encoders inside each fold on train folds only.",
+)
+_TIMESERIES_PROTOCOL = (
+    "Use a temporal split: train on the past, validate/test on the most recent window. "
+    "Never shuffle.",
+    "Backtest with TimeSeriesSplit (expanding or rolling window, n_splits=5).",
+    "Compute lag/rolling features inside each fold; never use future information.",
+    "Compare against a naive previous-value / seasonal-naive baseline.",
+    "Report MAE/RMSE/MAPE per fold (mean ± std) and on the final holdout horizon.",
+)
+_RETRIEVAL_PROTOCOL = (
+    "Build a fixed labeled query -> relevant-document evaluation set and freeze it.",
+    "Evaluate retrieval first: Recall@k, MRR, and source-hit rate on the fixed query set.",
+    "Use a fixed dev/test query split (or k-fold over queries) for stable estimates; "
+    "never tune on test queries.",
+    "Chunk once with recorded size/overlap; fit nothing on the eval queries.",
+    "Only evaluate generation after retrieval reaches the target Recall@k; require source "
+    "citations (faithfulness).",
+)
+_RECOMMENDATION_PROTOCOL = (
+    "Use a time-aware split: train on past interactions, test on future ones. No random split.",
+    "Evaluate Recall@k / NDCG@k / MRR on held-out future interactions.",
+    "Guard cold-start users/items and leakage of future interactions into training.",
+)
+DEFAULT_EVAL_PROTOCOL = (
+    "Hold out a test set and keep it untouched until final reporting.",
+    "Use k-fold cross-validation (k=5, fixed seed) for model selection, with the fold scheme "
+    "that matches the data: StratifiedKFold for classification, KFold for tabular regression, "
+    "TimeSeriesSplit for time-ordered data, GroupKFold when rows share an entity.",
+    "Fit all preprocessing inside each fold on the training folds only.",
+    "Report mean ± std of the main metric across folds, then confirm on the held-out test set.",
+)
+
+_EVAL_PROTOCOLS: dict[str, tuple[str, ...]] = {
+    "text_classification": _CLASSIFICATION_PROTOCOL,
+    "image_classification": _CLASSIFICATION_PROTOCOL,
+    "regression": _REGRESSION_PROTOCOL,
+    "forecasting": _TIMESERIES_PROTOCOL,
+    "retrieval": _RETRIEVAL_PROTOCOL,
+    "rag": _RETRIEVAL_PROTOCOL,
+    "recommendation": _RECOMMENDATION_PROTOCOL,
+}
+
+
+def evaluation_protocol_for(task_type: str | None) -> list[str]:
+    """Return the standard train/eval protocol for the task's data type."""
+    if not task_type:
+        return list(DEFAULT_EVAL_PROTOCOL)
+    return list(_EVAL_PROTOCOLS.get(task_type, DEFAULT_EVAL_PROTOCOL))

@@ -3,7 +3,7 @@ from typing import Any
 from octopus.core.files import atomic_write_text, backup_if_exists
 from octopus.core.paths import COMPUTE_BUDGET_MD, DATA_STRATEGY_MD, EXPERIMENT_MD, ML_DESIGN_MD
 from octopus.core.schemas import ProjectState
-from octopus.planners.ml_rules import MlPlanRules, rules_for_task
+from octopus.planners.ml_rules import MlPlanRules, evaluation_protocol_for, rules_for_task
 from octopus.planners.rendering import render_template
 
 
@@ -105,6 +105,7 @@ def _planner_context(state: ProjectState, rules: MlPlanRules) -> dict[str, Any]:
         "model_candidates": candidates,
         "data_checks": list(rules.data_checks),
         "training_checklist": list(rules.training_checklist),
+        "evaluation_protocol": evaluation_protocol_for(state.task_type),
         "compute_budget_notes": _compute_budget_notes(state),
     }
 
