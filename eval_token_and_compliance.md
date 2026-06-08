@@ -270,3 +270,55 @@ Generated deliverables được ghi vào thư mục tạm mà script in ra sau m
 
 Lưu ý: đây vẫn chưa phải live Codex 3 lần/nhánh. Nó là benchmark local lặp lại
 được để kiểm dataset thật + token nền + deliverable skeleton trước khi chạy live.
+
+---
+
+## 10. Benchmark post-baseline: nâng cấp bằng nhiều model / stacking
+
+Benchmark này mô phỏng giai đoạn **sau khi baseline đã được log**. Mục tiêu
+không phải train ensemble, mà là đo token cho deliverable tiếp theo:
+
+> Viết upgrade plan + stacking/fusion script skeleton, DỪNG, chưa train.
+
+Command chạy lại:
+
+```bash
+python tests/benchmark/token_eval_post_baseline.py
+```
+
+Thiết lập:
+
+- Mỗi scenario tạo project Octopus riêng trong `/tmp`.
+- Log baseline completed `E001`.
+- Sinh baseline profile.
+- Chọn direction nâng cấp:
+  - ML/DL: stacking nhiều candidate model bằng out-of-fold predictions.
+  - RAG: hybrid lexical retriever stack bằng reciprocal rank fusion.
+- Build `octopus context --direction D1 --target codex`.
+- Không train base model, meta-model, retriever, hay fusion.
+
+Phép đo token:
+
+- Nhánh A = prompt thường + prompt stacking + dataset summary + planning docs +
+  baseline/profile/next-step/code context phải dán tay.
+- Nhánh B = prompt Octopus + prompt stacking + selected direction context
+  `.octopus/context/current_context.md`.
+- Output = deterministic `upgrade_plan.md` + `stacking_script_skeleton.py`.
+
+Kết quả chạy ngày 2026-06-08 với tokenizer `cl100k_base`:
+
+| Scenario | A prompt-only input | B Octopus direction input | Saving % | Upgrade plan+script output |
+|---|---:|---:|---:|---:|
+| ML | 5,001 | 1,222 | 75.6% | 270 |
+| DL | 3,531 | 1,214 | 65.6% | 274 |
+| RAG | 3,611 | 1,196 | 66.9% | 271 |
+
+Ý nghĩa:
+
+- Ở lượt baseline đầu tiên, Octopus chỉ giảm vừa phải vì context còn phải mang
+  nhiều planning facts.
+- Sau baseline, lợi thế lớn hơn vì Octopus đã nén trạng thái thành
+  **selected direction + evidence + guardrails + relevant code**, thay vì dán lại
+  toàn bộ planning docs, baseline profile, next steps và code snippets.
+- Stacking vẫn phải bị ràng buộc: từng base model là candidate run riêng, split
+  giữ nguyên, meta-model chỉ dùng OOF/validation predictions, không tune test.
