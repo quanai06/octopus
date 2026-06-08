@@ -1,5 +1,7 @@
 # CLI Octopus
 
+[![CI](https://github.com/quanai06/octopus/actions/workflows/ci.yml/badge.svg)](https://github.com/quanai06/octopus/actions/workflows/ci.yml)
+
 Octopus is a Python CLI that turns an ML/DL/RAG project into a baseline-first
 workflow for Codex. It captures project requirements, renders planning files,
 builds a compact task context, tracks experiments, and keeps Codex from jumping
@@ -611,6 +613,59 @@ After the real baseline run:
 octopus exp ingest --run-dir <run_dir> --kind baseline
 octopus exp profile
 ```
+
+## CI/CD
+
+GitHub Actions workflows live in `.github/workflows/`.
+
+CI runs on push to `main`, pull requests to `main`, and manual dispatch:
+
+```text
+.github/workflows/ci.yml
+```
+
+CI jobs:
+
+- Python 3.11 and 3.12 run the same local gate as developers:
+
+```bash
+make check
+```
+
+- A package build job verifies source distribution and wheel creation:
+
+```bash
+python -m build
+```
+
+Publishing is release-driven:
+
+```text
+.github/workflows/publish.yml
+```
+
+It builds the package and publishes to PyPI when a GitHub Release is published.
+The workflow uses PyPI Trusted Publishing (`id-token: write`), so configure the
+PyPI project to trust:
+
+```text
+owner: quanai06
+repository: octopus
+workflow: publish.yml
+environment: pypi
+```
+
+Release flow:
+
+```bash
+make check
+python -m build
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Then create/publish the GitHub Release for that tag. The publish workflow will
+upload the package to PyPI.
 
 ## Development
 
