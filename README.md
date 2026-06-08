@@ -1,150 +1,132 @@
 # CLI Octopus
 
-Octopus is a Python CLI for ML/DL project planning. It captures project requirements,
-generates planning files, builds a compact working context for Claude Code or Codex,
-and blocks model work until the project has an explicit plan.
+Octopus is a Python CLI that turns an ML/DL/RAG project into a baseline-first
+workflow for Codex. It captures project requirements, renders planning files,
+builds a compact task context, tracks experiments, and keeps Codex from jumping
+straight to the main model before a real baseline exists.
 
-For ML/DL/RAG projects, Octopus asks the user to choose the baseline model from
-task-specific options instead of typing the baseline manually. That selected baseline
-is then used by `ml_design.md`, `experiment_plan.md`, `.octopus/tasks.json`, and
-baseline-first enforcement.
+The intended Codex loop is:
 
-Every single-choice or multi-choice intake prompt keeps a `custom...` option at the end,
-so users can pick a suggested workflow value or write their own when the defaults do not fit.
+```text
+requirements -> plan -> baseline context -> baseline run -> ingest/profile
+-> selected next direction -> one controlled improvement
+```
+
+Octopus is not a training framework. It is the project brain and guardrail layer
+around your training/eval scripts.
+
+## What Octopus Gives Codex
+
+- A one-command baseline setup prompt: `octopus-baseline`.
+- A compact working file: `.octopus/context/current_context.md`.
+- Baseline-first task gates in `.octopus/tasks.json`.
+- Experiment memory in `.octopus/experiments/`.
+- Baseline profiling and next-step selection.
+- Codex prompt routers installed under `~/.codex/prompts/`.
+
+Official Codex references:
+
+- Codex docs: https://developers.openai.com/codex
+- Codex CLI docs: https://developers.openai.com/codex/cli
+- Codex use cases: https://developers.openai.com/codex/use-cases
 
 ## Install
 
 Install Octopus from this repository:
 
 ```bash
+git clone <this-repo-url>
+cd octopus
+
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+Verify:
+
+```bash
+octopus --help
+pytest
+```
+
 Python 3.11+ is required.
 
-Install an agent runtime if you want Octopus to steer Codex or Claude Code:
+Install Codex CLI if you do not already have it:
 
 ```bash
-# Codex CLI, macOS/Linux
 curl -fsSL https://chatgpt.com/codex/install.sh | sh
-
-# Claude Code, macOS/Linux/WSL
-curl -fsSL https://claude.ai/install.sh | bash
-```
-
-Then authenticate by running the runtime once:
-
-```bash
 codex
-claude
 ```
 
-References:
-- Codex CLI docs: https://developers.openai.com/codex/cli
-- Claude Code setup docs: https://code.claude.com/docs/en/getting-started
-
-## Commands
-
-```bash
-octopus init      # create .octopus/ plus planning files
-octopus ask       # requirement intake (interactive, or --from answers.yaml for headless)
-octopus plan      # render requirements.md
-octopus ml-plan   # render ML design, data, compute, and experiment plans
-octopus tasks     # render tasks.md
-octopus task      # manage real task state and dependency gates
-octopus context   # build smart .octopus/context/current_context.md
-octopus exp       # init, log, ingest, analyze, profile, next, compare, and report experiments
-octopus sync      # refresh CLAUDE.md and/or AGENTS.md
-octopus status    # show project snapshot
-octopus session   # short-term in-session memory (start, show, log, end)
-octopus resume    # restore working context after a reset
-octopus install   # embed Octopus commands/agents/hook into Claude Code & Codex
-octopus uninstall # remove installed artifacts (manifest-driven)
-```
-
-`octopus --help` lists the full Phase 1 command surface.
-
-## Demo Flow
-
-```bash
-mkdir viet-emotion-classifier
-cd viet-emotion-classifier
-
-octopus init --runtime claude,codex
-octopus ask
-octopus plan
-octopus ml-plan
-octopus tasks
-octopus task next
-octopus task start T010
-octopus context --task "train TF-IDF baseline" --profile training --budget 6000
-octopus exp log --kind baseline --name tfidf_baseline --metric macro_f1=0.58 --note "stable baseline"
-octopus task start T020
-octopus sync
-octopus status
-```
-
-Expected files:
-
-```text
-requirements.md
-ml_design.md
-experiment_plan.md
-data_strategy.md
-compute_budget.md
-tasks.md
-.octopus/tasks.json
-CLAUDE.md
-AGENTS.md
-.octopus/config.yaml
-.octopus/project_state.json
-.octopus/context/current_context.md
-.octopus/experiments/
-.octopus/adr/
-```
-
-## Use With Codex
-
-Install Octopus prompt routers into Codex:
+Then install Octopus' Codex prompt routers:
 
 ```bash
 octopus install --runtime codex
 ```
 
-This writes managed markdown prompts under `~/.codex/prompts/`:
+This writes:
 
 ```text
-octopus-baseline.md
-octopus-plan.md
-octopus-train.md
-octopus-tune.md
-octopus-status.md
-octopus-resume.md
+~/.codex/prompts/octopus-baseline.md
+~/.codex/prompts/octopus-plan.md
+~/.codex/prompts/octopus-train.md
+~/.codex/prompts/octopus-tune.md
+~/.codex/prompts/octopus-status.md
+~/.codex/prompts/octopus-resume.md
+~/.codex/.octopus-manifest.json
 ```
 
-Fast baseline setup:
+Uninstall:
+
+```bash
+octopus uninstall --runtime codex
+```
+
+## Fast Start With Codex
+
+From inside your ML/DL/RAG project:
 
 ```bash
 octopus install --runtime codex
 codex
 ```
 
-Then tell Codex:
+In Codex, type:
 
 ```text
 octopus-baseline
 ```
 
-The installed prompt tells Codex to initialize Octopus if needed, collect missing
-requirements, render planning files, create tasks, build
-`.octopus/context/current_context.md`, and stop at the baseline plan/script
-skeleton unless you explicitly ask it to train.
+Expected behavior:
 
-Manual Codex loop:
+1. If `.octopus/` is missing, Codex runs `octopus init --runtime claude,codex`.
+2. Codex collects or writes missing project facts.
+3. Codex runs `octopus ask --from answers.yaml` when it can avoid an interactive TTY.
+4. Codex runs `octopus plan`, `octopus ml-plan`, and `octopus tasks`.
+5. Codex runs `octopus task next`.
+6. Codex runs `octopus context --task "train the baseline" --profile training`.
+7. Codex reads `.octopus/context/current_context.md`.
+8. Codex writes the baseline plan and baseline script skeleton.
+9. Codex stops before training unless you explicitly ask it to run the baseline.
+
+If your Codex surface does not expand prompt files by name, open or paste:
 
 ```bash
+cat ~/.codex/prompts/octopus-baseline.md
+```
+
+Then paste that content into Codex.
+
+## Manual Codex Setup
+
+Use this when you want full control instead of the one-shot `octopus-baseline`
+router.
+
+```bash
+mkdir viet-emotion-classifier
+cd viet-emotion-classifier
+
 octopus init --runtime codex
 octopus ask
 octopus plan
@@ -155,278 +137,368 @@ octopus context --task "train the baseline" --profile training
 codex
 ```
 
-Prompt Codex with the installed router or the equivalent text:
+Prompt Codex:
 
 ```text
 This project uses Octopus. Run `octopus task next`, then read ONLY
-`.octopus/context/current_context.md` as your working context. Implement the
-baseline first. Do not start the main model before a baseline, do not change
-the train/validation/test split, and do not tune on the test set.
+`.octopus/context/current_context.md` as your working context.
+
+Implement the baseline first and stop after writing the baseline training-script
+skeleton. Do not train unless I explicitly ask. Do not start the main model
+before a baseline, do not change the train/validation/test split, and do not tune
+on the test set.
 ```
 
-After a real training run, ingest it and profile the baseline before tuning:
+## Headless Setup For Codex
+
+`octopus ask` is interactive. For Codex, CI, or benchmark runs, use a YAML/JSON
+answers file.
+
+Example `answers.yaml`:
+
+```yaml
+project_name: VSMEC Emotion Classifier
+project_goal: Build a Vietnamese social-media emotion classifier.
+target_users: ML engineers
+project_type: machine learning
+task_type: text_classification
+input_type: text
+output_type: emotion_label
+dataset_status: available
+dataset_size_note: tests/datasets/vsmec, fixed train/valid/test XLSX files
+has_labels: true
+has_class_imbalance: true
+main_metric: macro_f1
+baseline_model: TF-IDF + Logistic Regression
+runtime:
+  - codex
+compute:
+  has_gpu: false
+  budget_note: CPU only
+```
+
+Run:
 
 ```bash
+octopus init --runtime codex --force
+octopus ask --from answers.yaml
+octopus plan
+octopus ml-plan
+octopus tasks
+octopus context --task "train the baseline" --profile training
+```
+
+Then ask Codex to read only:
+
+```text
+.octopus/context/current_context.md
+```
+
+## Use With Claude Code
+
+Octopus installs the same baseline-first workflow into Claude Code, plus two
+things the Codex surface does not get: specialized subagents and a hard
+`PreToolUse` guard.
+
+Install the Claude Code artifacts:
+
+```bash
+octopus install --runtime claude
+```
+
+This writes:
+
+```text
+~/.claude/commands/octopus-baseline.md
+~/.claude/commands/octopus-plan.md
+~/.claude/commands/octopus-train.md
+~/.claude/commands/octopus-tune.md
+~/.claude/commands/octopus-status.md
+~/.claude/commands/octopus-resume.md
+~/.claude/agents/octopus-baseline-runner.md
+~/.claude/agents/octopus-experiment-analyst.md
+~/.claude/agents/octopus-tuner.md
+~/.claude/agents/octopus-data-auditor.md
+~/.claude/agents/octopus-rag-evaluator.md
+~/.claude/settings.json            # baseline-guard PreToolUse hook (merged, idempotent)
+~/.claude/.octopus-manifest.json
+```
+
+Existing `settings.json` keys are preserved, and reinstalling never duplicates
+the hook.
+
+### Fast start
+
+From inside your ML/DL/RAG project:
+
+```bash
+octopus install --runtime claude
+claude
+```
+
+In Claude Code, run the slash command:
+
+```text
+/octopus-baseline
+```
+
+It follows the same path as Codex: initialize if needed, collect missing facts
+and run `octopus ask --from answers.yaml`, then `octopus plan --force`,
+`octopus ml-plan --force`, `octopus tasks --force`, `octopus task next`,
+`octopus context --task "train the baseline" --profile training`, read
+`.octopus/context/current_context.md`, write the baseline plan + script skeleton,
+and stop before training.
+
+Other slash commands: `/octopus-plan`, `/octopus-train`, `/octopus-tune`,
+`/octopus-status`, `/octopus-resume`.
+
+### Subagents
+
+Claude Code can delegate to the installed subagents:
+
+- `octopus-baseline-runner` — establish and ingest the first baseline.
+- `octopus-experiment-analyst` — analyze/profile a finished run.
+- `octopus-tuner` — implement exactly one selected direction.
+- `octopus-data-auditor` — split / leakage / imbalance audit.
+- `octopus-rag-evaluator` — retrieval eval + citation/faithfulness.
+
+### Baseline-guard hook
+
+A `PreToolUse` hook on the Bash tool blocks main-model training before a
+completed baseline exists. Commands like `python train.py`,
+`accelerate launch train.py`, `torchrun ...`, `python train_phobert.py`, or any
+`fine-tune` command exit with code `2` and an explanation until you log a
+baseline. The baseline scripts themselves are not blocked.
+
+### Manual setup
+
+Use this for full control instead of the one-shot `/octopus-baseline`:
+
+```bash
+octopus init --runtime claude
+octopus ask                     # or: octopus ask --from answers.yaml  (headless)
+octopus plan
+octopus ml-plan
+octopus tasks
+octopus task next
+octopus context --task "train the baseline" --profile training
+claude
+```
+
+Then prompt Claude Code:
+
+```text
+This project uses Octopus. Run `octopus task next`, then read ONLY
+`.octopus/context/current_context.md` as your working context.
+
+Implement the baseline first and stop after writing the baseline training-script
+skeleton. Do not train unless I ask. Do not start the main model before a
+baseline, do not change the train/validation/test split, and do not tune on the
+test set.
+```
+
+Uninstall:
+
+```bash
+octopus uninstall --runtime claude
+```
+
+Install both runtimes at once with `octopus install --runtime claude,codex`.
+
+## Commands
+
+Core project setup:
+
+```bash
+octopus init      # create .octopus/ plus generated files
+octopus ask       # interactive intake, or --from answers.yaml
+octopus plan      # render requirements.md
+octopus ml-plan   # render ml_design/data/compute/experiment plans
+octopus tasks     # render tasks.md and .octopus/tasks.json
+octopus sync      # refresh AGENTS.md / CLAUDE.md from current state
+octopus status    # show project snapshot
+```
+
+Task/context commands:
+
+```bash
+octopus task next
+octopus task start T010
+octopus task done T010
+octopus context --task "train the baseline" --profile training
+octopus context --direction D1 --target codex
+```
+
+Experiment commands:
+
+```bash
+octopus exp log --kind baseline --name baseline --metric macro_f1=0.58
 octopus exp ingest --run-dir <run_dir> --kind baseline
+octopus exp profile
+octopus exp next
+octopus exp choose D1
+octopus exp compare --metric macro_f1
+octopus exp report
+```
+
+Runtime install:
+
+```bash
+octopus install --runtime codex
+octopus uninstall --runtime codex
+```
+
+## Generated Files
+
+Project files:
+
+```text
+requirements.md
+ml_design.md
+experiment_plan.md
+data_strategy.md
+compute_budget.md
+tasks.md
+AGENTS.md
+```
+
+Octopus state:
+
+```text
+.octopus/config.yaml
+.octopus/project_state.json
+.octopus/tasks.json
+.octopus/context/current_context.md
+.octopus/experiments/
+.octopus/reports/
+.octopus/plans/
+.octopus/session/
+.octopus/memory/
+```
+
+Codex prompt routers:
+
+```text
+~/.codex/prompts/octopus-baseline.md
+~/.codex/prompts/octopus-plan.md
+~/.codex/prompts/octopus-train.md
+~/.codex/prompts/octopus-tune.md
+~/.codex/prompts/octopus-status.md
+~/.codex/prompts/octopus-resume.md
+```
+
+## Baseline-First Rules
+
+For ML/DL/RAG projects, Octopus enforces these rules:
+
+- Start with a simple reproducible baseline.
+- Do not log or start main-model work before a completed baseline exists.
+- Do not tune on the test set.
+- Do not change train/validation/test split unless the selected direction says so.
+- Change one thing per experiment.
+- Track the project's main metric and diagnostic metrics, not just accuracy.
+
+Logging or ingesting a completed baseline marks `T010`, `T011`, and `T012` done,
+then unblocks `T020`.
+
+Example:
+
+```bash
+octopus exp ingest --run-dir runs/E001 --kind baseline
 octopus exp profile
 octopus exp next
 octopus exp choose D1
 octopus context --direction D1 --target codex
 ```
 
-## Use With Claude Code
-
-Install Octopus commands, subagents, and the baseline guard hook into Claude Code:
-
-```bash
-octopus install --runtime claude
-```
-
-This writes managed files under `~/.claude/`:
+Then in Codex:
 
 ```text
-commands/octopus-baseline.md
-commands/octopus-plan.md
-commands/octopus-train.md
-commands/octopus-tune.md
-commands/octopus-status.md
-commands/octopus-resume.md
-agents/octopus-baseline-runner.md
-agents/octopus-experiment-analyst.md
-agents/octopus-tuner.md
-agents/octopus-data-auditor.md
-agents/octopus-rag-evaluator.md
-settings.json  # merged PreToolUse baseline-guard hook
+Read `.octopus/context/current_context.md` and implement only selected direction D1.
+Do not implement multiple directions at once. Stop before training unless I ask.
 ```
 
-Fast baseline setup:
+## Baseline Profile And Tuning
+
+After a baseline is logged:
 
 ```bash
-octopus install --runtime claude
-claude
+octopus exp profile
 ```
 
-Inside Claude Code:
+Octopus writes:
 
 ```text
-/octopus-baseline
+.octopus/reports/baseline_profile.md
 ```
 
-The slash command follows the same setup path as Codex: initialize when needed,
-ask only for missing project facts, render plans/tasks, build context, then
-prepare the first baseline deliverable.
+The profile reports:
 
-Manual Claude Code loop:
+- baseline standing vs target;
+- weak classes or low retrieval metrics;
+- bias/variance symptoms;
+- data quality flags;
+- recommended techniques;
+- "Do Not Try Yet" items.
+
+Then:
 
 ```bash
-octopus init --runtime claude
-octopus ask
-octopus plan
-octopus ml-plan
-octopus tasks
-octopus context --task "train the baseline" --profile training
-claude
+octopus exp next
+octopus exp choose D1
+octopus context --direction D1 --target codex
 ```
 
-Inside Claude Code, use the installed slash commands:
-
-```text
-/octopus-baseline
-/octopus-plan
-/octopus-train
-/octopus-tune
-/octopus-status
-/octopus-resume
-```
-
-The Claude `PreToolUse` baseline guard blocks shell commands that look like
-main-model training before a completed baseline exists. When it blocks, it exits
-with code `2` and tells the agent to log or ingest a baseline first.
-
-To remove installed runtime artifacts:
-
-```bash
-octopus uninstall --runtime claude,codex
-```
-
-## Context Rules
-
-`octopus context` builds a task-focused context file from selected markdown sections
-and relevant code snippets instead of always loading every planning file in full.
-Supported profiles are `planning`, `training`, `debugging`, and `review`.
-
-```bash
-octopus context --task "train PhoBERT baseline" --profile training
-octopus context --task "debug low macro F1" --profile debugging --budget 4000
-octopus context --task "review experiment plan" --profile review
-octopus context --task "inspect all planning docs" --full
-```
-
-The context builder estimates token count with `tiktoken`. It excludes common heavy
-or irrelevant files, including `.venv/`, `.git/`, `data/`, `datasets/`, checkpoints,
-model weights, CSVs, Parquet files, logs, `wandb/`, and `mlruns/`. Additional patterns
-from `.gitignore` are respected.
-
-## ML Planner
-
-`octopus ml-plan` generates ML-specific planning artifacts:
-
-```text
-ml_design.md
-experiment_plan.md
-data_strategy.md
-compute_budget.md
-```
-
-For ML/DL tasks it frames the problem type, baseline models, candidate models,
-metrics, dataset checks, compute limits, first experiments, and stop conditions before
-training starts.
-
-## Experiment Memory
-
-`octopus exp` stores simple experiment memory in `.octopus/experiments/`.
-
-```bash
-octopus exp init
-
-octopus exp log \
-  --kind baseline \
-  --name phobert_weighted_loss \
-  --model phobert-base \
-  --dataset vietnamese_emotion \
-  --metric macro_f1=0.72 \
-  --metric fear_recall=0.51 \
-  --note "Improved minority recall but overfit after epoch 3"
-
-octopus exp list
-octopus exp compare --metric macro_f1
-octopus exp diagnose --exp exp_001
-octopus exp suggest
-octopus exp report
-```
-
-For ML/DL/RAG projects, Octopus blocks main-model experiment logging until a completed
-baseline exists. Logging a completed baseline marks `T010`, `T011`, and `T012` done
-in `.octopus/tasks.json`, which unblocks `T020`.
-
-Each run is saved as YAML and indexed locally:
-
-```text
-.octopus/
-  experiments/
-    index.yaml
-    exp_001.yaml
-  reports/
-    experiment_report.md
-```
-
-Experiment diagnosis and suggestions are rule-based. Octopus flags overfitting,
-underfitting, high accuracy with low macro F1, low minority recall, weak overall
-metrics, unstable loss, and metrics that stop changing across recent runs.
-
-## Baseline Profile
-
-Before tuning, `octopus exp profile` builds a deep understanding of the baseline
-and writes `.octopus/reports/baseline_profile.md`:
-
-```bash
-octopus exp profile            # profile the best completed baseline
-octopus exp profile --exp E001 # profile a specific run
-octopus exp profile --top-k 3  # limit recommended techniques
-```
-
-The profile reports where the baseline stands vs the target, whether it is
-bias- or variance-limited, weak classes, data-quality risks, and a ranked list
-of concrete tuning techniques (plus a "Do Not Try Yet" list). Recommendations
-are domain-aware: classification, regression, and RAG/retrieval each draw from a
-deterministic technique library (`octopus.experiments.technique_library`) that
-maps diagnosed symptoms to techniques, ordered by leverage, cost, and risk.
+This gives Codex a smaller direction-specific context instead of the whole
+planning history.
 
 ## Tracker Auto-Ingest
 
-`octopus exp ingest` auto-detects and reads common experiment trackers, so you
-can point it at a tracker run directory instead of writing `metrics.json` by hand:
+`octopus exp ingest` can read common tracker output directories:
 
 ```bash
 octopus exp ingest --run-dir mlruns/0/<run_id> --kind baseline   # MLflow
-octopus exp ingest --run-dir wandb/run-<id>                       # Weights & Biases
-octopus exp ingest --run-dir runs/<name>                          # TensorBoard
-octopus exp ingest --run-dir runs/E001 --tracker none            # disable detection
+octopus exp ingest --run-dir wandb/run-<id>                      # W&B
+octopus exp ingest --run-dir runs/<name>                         # TensorBoard
+octopus exp ingest --run-dir runs/E001 --tracker none            # plain files
 ```
 
-MLflow and W&B are parsed directly from their on-disk files (no extra
-dependency). TensorBoard event files need the optional `tensorboard` package;
-without it, ingest reports a clear install hint. Detected runs are tagged with
-their source (for example `source:mlflow`). Explicit `--metrics` / `--report`
-files always take precedence over tracker values.
+Plain run directories can include:
 
-## Runtime Integration (Claude Code & Codex)
-
-`octopus install` embeds Octopus into your AI runtimes so you are steered into the
-baseline-first workflow with a small token surface:
-
-```bash
-octopus install --runtime claude,codex     # install into ~/.claude and ~/.codex
-octopus install --runtime claude --home /tmp/sandbox   # install into a custom base
-octopus uninstall --runtime claude,codex   # clean removal (manifest-driven)
+```text
+metrics.json
+classification_report.json
+config.yaml
 ```
 
-It writes thin command routers (`/octopus-baseline`, `/octopus-plan`,
-`/octopus-train`, `/octopus-tune`, `/octopus-status`, `/octopus-resume`), Claude subagents
-(`octopus-baseline-runner`, `octopus-experiment-analyst`, `octopus-tuner`,
-`octopus-data-auditor`, `octopus-rag-evaluator`), and a Claude `PreToolUse`
-**baseline-guard** hook that blocks main-model training before a baseline exists.
-Existing `settings.json` is preserved; the hook is idempotent.
+## Session Resume
 
-### Non-interactive setup (headless / agent-driven)
-
-`octopus ask` is interactive. For headless runs (an agent's Bash tool, CI, the
-benchmark) seed project state from a file instead — no TTY needed:
+Use this when Codex loses context or starts a new session:
 
 ```bash
-octopus ask --from answers.yaml   # YAML/JSON mapping of fields; merges onto state
-```
-
-`/octopus-baseline` uses this path: it gathers answers, writes `answers.yaml`,
-runs `octopus ask --from answers.yaml`, then `plan/ml-plan/tasks --force`, so the
-whole setup-to-baseline flow works without a human at the prompt.
-
-## Session Memory
-
-`octopus session` keeps short-term, in-session memory in `.octopus/session/` so a
-runtime can be restored after a context reset. It auto-captures from the workflow
-(`task start`, `exp choose`, `exp ingest`):
-
-```bash
-octopus session start --goal "beat the TF-IDF baseline"
+octopus session start --goal "beat the baseline"
 octopus session show
-octopus resume          # summary + which restore files exist
-octopus session end
+octopus resume
 ```
 
-This is distinct from `.octopus/memory/` (long-term experiment archive): the
-session is RAM, memory is history.
+Then in Codex:
+
+```text
+octopus-resume
+```
+
+or paste:
+
+```bash
+cat ~/.codex/prompts/octopus-resume.md
+```
 
 ## Benchmarks
 
-Benchmarks are deterministic local token measurements. They use Octopus'
-`cl100k_base` token estimator and stop at a fixed deliverable. They do not train
-models. Live Codex/Claude Code token usage should still be measured separately
-with fresh sessions if you want runtime billing/compliance numbers.
+Benchmarks are deterministic local token measurements using Octopus'
+`cl100k_base` estimator. They do not train models.
 
-**Important — what this measures.** These harnesses are deterministic Python
-scripts: they call Octopus' own functions and tokenize the resulting files. The
-launching agent (Codex, Claude Code, or a plain `python` command) makes no
-decisions, so the numbers are **agent-independent by construction**. Both Codex
-and Claude Code produce the *same* numbers — that is expected, and it says
-**nothing about baseline code quality**. It only shows how much context Octopus
-saves vs pasting docs by hand. The agent-dependent signals (live token usage and
-the quality/compliance of the code each agent writes) are NOT measured here — see
-[What this benchmark does not measure](#what-this-benchmark-does-not-measure).
-
-### Benchmark 1: Baseline Plan + Script Skeleton
-
-Command:
+### Baseline Plan + Script Skeleton
 
 ```bash
 python tests/benchmark/token_eval_datasets.py
@@ -440,14 +512,7 @@ Datasets:
 | DL | `tests/datasets/alpaca-dataset/dataset` | Alpaca / not-alpaca image classification |
 | RAG | `tests/datasets/wikiqa` | BM25 retrieval evaluation |
 
-Measurement:
-
-- Branch A = detailed prompt + dataset summary + six planning docs.
-- Branch B = Octopus prompt + `.octopus/context/current_context.md`.
-- Output = deterministic `baseline_plan.md` + `baseline_script_skeleton.py`.
-
-Result (deterministic — same whoever launches it; verified via Codex and Claude
-Code, 2026-06-08):
+Latest local result:
 
 | Scenario | A prompt-only input | B Octopus input | Saving | Output plan+script |
 |---|---:|---:|---:|---:|
@@ -455,37 +520,13 @@ Code, 2026-06-08):
 | DL | 2,437 | 2,027 | 16.8% | 397 |
 | RAG | 2,512 | 2,027 | 19.3% | 432 |
 
-Interpretation: the first baseline turn saves a moderate amount because Octopus
-still has to carry project facts, dataset facts, metrics, split rules, and
-baseline-first constraints.
-
-### Benchmark 2: Post-Baseline Stacking / Fusion Upgrade
-
-Command:
+### Post-Baseline Stacking / Fusion Upgrade
 
 ```bash
 python tests/benchmark/token_eval_post_baseline.py
 ```
 
-Setup:
-
-- Create a temporary Octopus project for each scenario.
-- Log a completed baseline `E001`.
-- Generate a baseline profile.
-- Choose a post-baseline direction:
-  - ML/DL: leakage-safe stacking with out-of-fold predictions.
-  - RAG: lexical retriever stack with reciprocal-rank fusion.
-- Build `octopus context --direction D1 --target codex`.
-- Stop after `upgrade_plan.md` + `stacking_script_skeleton.py`; no training.
-
-Measurement:
-
-- Branch A = prompt-only grounding with prompt, dataset summary, planning docs,
-  baseline profile, next-step docs, and relevant code snippets.
-- Branch B = Octopus prompt + selected direction context.
-
-Result (deterministic — same whoever launches it; verified via Codex and Claude
-Code, 2026-06-08):
+Latest local result:
 
 | Scenario | A prompt-only input | B Octopus direction input | Saving | Output plan+script |
 |---|---:|---:|---:|---:|
@@ -493,52 +534,59 @@ Code, 2026-06-08):
 | DL | 3,531 | 1,214 | 65.6% | 274 |
 | RAG | 3,611 | 1,196 | 66.9% | 271 |
 
-Interpretation: after the baseline, Octopus saves much more context because the
-state is compressed into selected direction, evidence, guardrails, and relevant
-code. Prompt-only has to paste the same grounding manually.
+Interpretation:
 
-Stacking guardrails used in the benchmark:
+- First baseline turn saves moderately because Codex still needs project facts.
+- Post-baseline tuning saves much more because Octopus compresses state into a
+  selected direction, evidence, guardrails, and relevant code context.
 
-- Train and log each base model as its own candidate run before stacking.
-- Keep the train/validation/test split frozen.
-- Fit the meta-model only on out-of-fold or validation predictions.
-- Do not tune on the test set.
-- For RAG, evaluate retrieval before generation.
+Agent-dependent live token usage is separate. Measure it from Codex' own usage
+counter in fresh sessions and score the produced artifacts with the rubric in:
 
-### What this benchmark does not measure
+```text
+eval_token_and_compliance.md
+```
 
-The tables above are **agent-independent**: the harness is a fixed script that
-tokenizes files, so Codex and Claude Code get identical numbers. That is the
-expected, correct result of a deterministic measurement — it is **not** a signal
-about the quality of the code an agent writes.
+## Troubleshooting
 
-The agent-dependent metrics are NOT auto-generated; they require actually running
-each agent live, in its own fresh session, on the same fixed task (see
-`eval_token_and_compliance.md` for the protocol and the /7 compliance rubric):
+`octopus` command not found:
 
-- **Live token usage** — input/output/total from each agent's own counter.
-- **Output quality + compliance** — does the produced baseline plan/script run,
-  use the correct split, stay baseline-first, report the right metrics, check for
-  leakage, and avoid test-set tuning?
+```bash
+source .venv/bin/activate
+pip install -e ".[dev]"
+python -m octopus.cli.main --help
+```
 
-Measured per agent (live tokens require the runtime's own counter; compliance is
-the /7 rubric scored against the real produced artifacts):
+Codex does not recognize `octopus-baseline`:
 
-| Agent | Scenario | Live total tokens | Quality/compliance (/7) |
-|---|---|---:|---:|
-| Claude Code | ML | n/a¹ | 7/7 |
-| Claude Code | DL | n/a¹ | 7/7 |
-| Claude Code | RAG | n/a¹ | 7/7 |
-| Codex | ML / DL / RAG | _run it_ | _score it_ |
+```bash
+octopus install --runtime codex
+ls ~/.codex/prompts
+cat ~/.codex/prompts/octopus-baseline.md
+```
 
-¹ An agent cannot read its own token counter mid-run; measure live tokens from the
-runtime's usage report in a fresh session.
+Then paste the prompt content into Codex.
 
-Claude Code's run is auditable: the real baseline plans + script skeletons it
-produced are in `tests/benchmark/claude_code_run/{ml,dl,rag}/`, and the scored
-rubric (with evidence and one honest limitation found in the baseline-guard regex)
-is in `tests/benchmark/claude_code_run/RESULT.md`. The Codex row is left for a
-separate Codex run.
+Codex tries to skip the baseline:
+
+```text
+Read `.octopus/context/current_context.md`. Follow Octopus baseline-first rules.
+Do not start the main model before a completed baseline exists.
+```
+
+No baseline exists but you want to tune:
+
+```bash
+octopus task next
+octopus context --task "train the baseline" --profile training
+```
+
+After the real baseline run:
+
+```bash
+octopus exp ingest --run-dir <run_dir> --kind baseline
+octopus exp profile
+```
 
 ## Development
 
@@ -549,3 +597,7 @@ pytest
 ruff check .
 mypy src
 ```
+
+This README is Codex-first, but Claude Code is fully supported — see
+[Use With Claude Code](#use-with-claude-code) for slash commands, subagents, and
+the baseline-guard hook.
