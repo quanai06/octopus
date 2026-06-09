@@ -40,6 +40,39 @@ def test_ask_from_file_sets_state(tmp_project):
     assert state.runtime == ["claude", "codex"]
 
 
+def test_ask_from_file_rejects_unknown_keys(tmp_project):
+    runner.invoke(app, ["init", "--force"])
+    answers = _answers()
+    answers["dataset"] = {"train": "train.csv"}
+    Path("answers.yaml").write_text(yaml.safe_dump(answers), encoding="utf-8")
+
+    result = runner.invoke(app, ["ask", "--from", "answers.yaml"])
+
+    assert result.exit_code == 1
+    assert "unknown top-level" in result.output
+    assert "dataset" in result.output
+
+
+def test_ask_from_file_infers_ml_from_ml_fields(tmp_project):
+    runner.invoke(app, ["init", "--force"])
+    answers = _answers()
+    answers.pop("project_type")
+    Path("answers.yaml").write_text(yaml.safe_dump(answers), encoding="utf-8")
+
+    result = runner.invoke(app, ["ask", "--from", "answers.yaml"])
+
+    assert result.exit_code == 0, result.output
+    assert load_state().project_type == "machine learning"
+
+
+def test_ask_schema_prints_example(tmp_project):
+    result = runner.invoke(app, ["ask", "--schema"])
+
+    assert result.exit_code == 0
+    assert "project_name:" in result.output
+    assert "compute:" in result.output
+
+
 def test_ask_from_file_merges_onto_existing(tmp_project):
     runner.invoke(app, ["init", "--force"])
     Path("a1.yaml").write_text(yaml.safe_dump(_answers()), encoding="utf-8")

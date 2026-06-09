@@ -21,6 +21,7 @@ Capture requirements into `.octopus/project_state.json`.
 |---|---|---|
 | `--reset` | off | Ignore existing state and start fresh. |
 | `--from PATH` | — | Non-interactive intake from a YAML/JSON answers file. |
+| `--schema` | off | Print an example `answers.yaml` schema and exit. |
 
 ### `octopus plan` / `octopus ml-plan` / `octopus tasks`
 Render planning artifacts. Each takes `--force` to overwrite.
@@ -28,6 +29,13 @@ Render planning artifacts. Each takes `--force` to overwrite.
 - `plan` → `requirements.md`
 - `ml-plan` → `ml_design.md`, `experiment_plan.md`, `data_strategy.md`, `compute_budget.md`
 - `tasks` → `tasks.md` + `.octopus/tasks.json`
+
+### `octopus baseline-spec`
+Generate a compact `baseline_spec.yaml` for fast baseline runs.
+
+| Option | Default | Description |
+|---|---|---|
+| `--force` | off | Overwrite without creating a backup. |
 
 ### `octopus sync`
 Regenerate `CLAUDE.md` / `AGENTS.md` from current state.
@@ -52,7 +60,7 @@ context instead of rebuilding.
 | Option | Default | Description |
 |---|---|---|
 | `--task TEXT` | — | Current task description (focuses the context). |
-| `--profile TEXT` | `training` | `planning` \| `training` \| `debugging` \| `review`. |
+| `--profile TEXT` | `training` | `planning` \| `training` \| `minimal-baseline` \| `debugging` \| `review`. |
 | `--budget INTEGER` | `6000` | Soft token budget for selected sections. |
 | `--full` | off | Include all planning sections. |
 | `--direction TEXT` | — | Build a direction-specific context (e.g. `D1`). |

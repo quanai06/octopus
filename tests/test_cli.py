@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from typer.testing import CliRunner
 
 from octopus.cli.commands.ask import (
@@ -8,6 +10,7 @@ from octopus.cli.commands.ask import (
     baseline_choices_for_task,
 )
 from octopus.cli.main import app
+from tests.helpers import write_state
 
 
 def test_help_lists_phase_1_commands():
@@ -20,6 +23,7 @@ def test_help_lists_phase_1_commands():
         "plan",
         "ml-plan",
         "tasks",
+        "baseline-spec",
         "context",
         "sync",
         "status",
@@ -27,6 +31,21 @@ def test_help_lists_phase_1_commands():
         "task",
     ]:
         assert command in result.output
+
+
+def test_status_formats_context_timestamp(tmp_project):
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", "--force"]).exit_code == 0
+    write_state()
+    context = Path(".octopus/context/current_context.md")
+    context.parent.mkdir(parents=True, exist_ok=True)
+    context.write_text("> Estimated tokens: 123\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["status"])
+
+    assert result.exit_code == 0
+    assert "Last built:" in result.output
+    assert ".000000" not in result.output
 
 
 def test_checkbox_accepts_existing_runtime_default():

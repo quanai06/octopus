@@ -11,7 +11,7 @@ from octopus.core.paths import (
     TASKS_MD,
 )
 
-ContextProfile = Literal["planning", "training", "debugging", "review"]
+ContextProfile = Literal["planning", "training", "debugging", "review", "minimal-baseline"]
 
 DEFAULT_PROFILE: ContextProfile = "training"
 DEFAULT_TOKEN_BUDGET = 6_000
@@ -39,6 +39,12 @@ PROFILE_RULES: dict[ContextProfile, list[SectionRule]] = {
         SectionRule(EXPERIMENT_MD, ("goal", "baseline", "experiment", "stop condition"), 40),
         SectionRule(COMPUTE_BUDGET_MD, ("recommended", "resource", "runtime"), 50),
         SectionRule(TASKS_MD, ("data pipeline", "baseline", "main model"), 60),
+    ],
+    "minimal-baseline": [
+        SectionRule(REQUIREMENTS_MD, ("dataset", "evaluation", "project goal"), 10),
+        SectionRule(ML_DESIGN_MD, ("baseline contract", "baseline models"), 20),
+        SectionRule(DATA_STRATEGY_MD, ("dataset readiness", "split", "leakage"), 30),
+        SectionRule(EXPERIMENT_MD, ("baseline",), 40),
     ],
     "debugging": [
         SectionRule(REQUIREMENTS_MD, ("evaluation", "dataset", "constraints", "risks"), 10),

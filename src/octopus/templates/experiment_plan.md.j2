@@ -11,9 +11,16 @@ Improve {{ main_metric }} for {{ project_goal or "the target machine learning ta
 ## Baseline
 
 - Model: {{ baseline_models[0] }}
+{% if fixed_split_available %}
+- Metric: {{ main_metric }} on validation during selection; report test once after config is frozen
+- Validation: provided validation split; no test tuning
+- Dataset: provided train/validation/test files are immutable
+- Final test: optionally train final model on train+validation, then evaluate test once
+{% else %}
 - Metric: {{ main_metric }} (report mean ± std across CV folds)
 - Validation: cross-validated per the Evaluation Protocol in `data_strategy.md`
 - Dataset: canonical cleaned dataset/corpus only; held-out test set frozen; model selection on cross-validation folds
+{% endif %}
 - Artifacts: cleaned-data manifest, split/fold/query manifest, preprocessing config, and seed(s)
 - Status: not started
 
@@ -28,8 +35,13 @@ Improve {{ main_metric }} for {{ project_goal or "the target machine learning ta
 ### Experiment 1: Classical baseline
 
 - Model: {{ baseline_models[0] }}
+{% if fixed_split_available %}
+- Metric: {{ main_metric }} on the provided validation split
+- Validation: fixed validation file; do not tune on test
+{% else %}
 - Metric: {{ main_metric }} (mean ± std across k folds)
 - Validation: k-fold cross-validation with a fixed seed; preprocessing fit per fold
+{% endif %}
 - Depends on: data split and label audit
 - Expected risk: weak representation but useful sanity check
 - Status: todo

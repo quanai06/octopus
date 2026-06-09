@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -31,6 +32,38 @@ class ProjectState(BaseModel):
     compute: ComputeConfig = Field(default_factory=ComputeConfig)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_updated: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="before")
+    @classmethod
+    def infer_ml_project_type(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        project_type = str(data.get("project_type") or "").strip().lower()
+        ml_signals = (
+            data.get("task_type"),
+            data.get("dataset_status"),
+            data.get("main_metric"),
+            data.get("baseline_model"),
+            data.get("has_labels"),
+            data.get("has_class_imbalance"),
+        )
+        if ("project_type" not in data or project_type == "") and any(
+            value is not None for value in ml_signals
+        ):
+            task_type = str(data.get("task_type") or "").strip().lower()
+            data["project_type"] = "rag" if task_type == "rag" else "machine learning"
+        return data
+
+    @property
+    def fixed_split_available(self) -> bool:
+        note = (self.dataset_size_note or "").lower()
+        if not note:
+            return False
+        has_train = bool(re.search(r"\btrain\b|train[_-]", note))
+        has_valid = bool(re.search(r"\bvalid\b|\bval\b|\bdev\b|valid[_-]|val[_-]", note))
+        has_test = bool(re.search(r"\btest\b|test[_-]", note))
+        return has_train and has_valid and has_test
 
 
 class TaskItem(BaseModel):

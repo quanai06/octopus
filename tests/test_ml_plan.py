@@ -100,3 +100,23 @@ def test_ml_plan_vietnamese_text_classification_candidates(tmp_project):
     assert "per-class recall" in ml_design
     assert "Experiment 3: Candidate model" in experiment_plan
     assert "Stop if macro_f1 does not improve after 3 controlled experiments." in experiment_plan
+
+
+def test_ml_plan_fixed_split_protocol(tmp_project):
+    write_state(
+        sample_ml_state(
+            dataset_size_note=(
+                "fixed train/valid/test files: train_nor_811.xlsx, "
+                "valid_nor_811.xlsx, test_nor_811.xlsx"
+            )
+        )
+    )
+    generate_ml_plan(force=True)
+
+    data_strategy = Path("data_strategy.md").read_text(encoding="utf-8")
+    experiment_plan = Path("experiment_plan.md").read_text(encoding="utf-8")
+
+    assert "fixed train/validation/test splits" in data_strategy
+    assert "Do not create a new split" in data_strategy
+    assert "provided validation split; no test tuning" in experiment_plan
+    assert "mean ± std across CV folds" not in experiment_plan

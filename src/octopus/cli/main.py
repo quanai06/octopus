@@ -3,7 +3,8 @@ from typing import Annotated
 
 import typer
 
-from octopus.cli.commands.ask import ask_from_file, ask_requirements
+from octopus.cli.commands.ask import ask_from_file, ask_requirements, print_answers_schema
+from octopus.cli.commands.baseline_spec import generate_baseline_spec
 from octopus.cli.commands.context import build_current_context
 from octopus.cli.commands.exp import app as exp_app
 from octopus.cli.commands.init import init_project
@@ -39,11 +40,18 @@ def init_cmd(
 @app.command("ask")
 def ask_cmd(
     reset: Annotated[bool, typer.Option("--reset")] = False,
+    schema: Annotated[
+        bool,
+        typer.Option("--schema", help="Print an example answers.yaml schema and exit."),
+    ] = False,
     from_file: Annotated[
         Path | None,
         typer.Option("--from", help="Non-interactive intake from a YAML/JSON answers file."),
     ] = None,
 ) -> None:
+    if schema:
+        print_answers_schema()
+        return
     if from_file is not None:
         ask_from_file(from_file)
     else:
@@ -65,6 +73,11 @@ def tasks_cmd(force: Annotated[bool, typer.Option("--force")] = False) -> None:
     generate_tasks(force=force)
 
 
+@app.command("baseline-spec")
+def baseline_spec_cmd(force: Annotated[bool, typer.Option("--force")] = False) -> None:
+    generate_baseline_spec(force=force)
+
+
 @app.command("context")
 def context_cmd(
     inspect_arg: Annotated[
@@ -75,7 +88,7 @@ def context_cmd(
         str,
         typer.Option(
             "--profile",
-            help="Context profile: planning, training, debugging, or review.",
+            help="Context profile: planning, training, minimal-baseline, debugging, or review.",
         ),
     ] = "training",
     budget: Annotated[

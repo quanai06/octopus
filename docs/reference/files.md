@@ -13,6 +13,7 @@ of truth; Markdown files are generated views.
 | `data_strategy.md` | `ml-plan` | Split, leakage, quality checks |
 | `compute_budget.md` | `ml-plan` | Resource profile and budget |
 | `tasks.md` | `tasks` | Human-readable task view |
+| `baseline_spec.yaml` | `baseline-spec` | Small fast-path baseline contract |
 | `CLAUDE.md` | `init`/`sync` | Claude Code project instructions (if runtime includes claude) |
 | `AGENTS.md` | `init`/`sync` | Codex/agent project instructions (if runtime includes codex) |
 

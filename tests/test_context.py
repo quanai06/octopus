@@ -85,6 +85,20 @@ def test_context_uses_training_profile_sections(tmp_project):
     assert "Functional Requirements" not in content
 
 
+def test_context_minimal_baseline_profile_is_smaller(tmp_project):
+    state = _write_plan_files()
+    training_content, training = build_context(
+        state, "train TF-IDF baseline", profile="training"
+    )
+    minimal_content, minimal = build_context(
+        state, "train TF-IDF baseline", profile="minimal-baseline", token_budget=1200
+    )
+
+    assert minimal.profile == "minimal-baseline"
+    assert minimal.estimated_tokens < training.estimated_tokens
+    assert len(minimal_content) < len(training_content)
+
+
 def test_context_full_includes_review_sections(tmp_project):
     state = _write_plan_files()
     content, result = build_context(state, "review project", full=True)

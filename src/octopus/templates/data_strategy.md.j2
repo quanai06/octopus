@@ -21,14 +21,24 @@
 
 ## Split & Cross-Validation
 
+{% if fixed_split_available %}
+The dataset already provides fixed train/validation/test splits. Treat those
+files as immutable evaluation inputs:
+{% else %}
 The baseline is a full train/eval protocol, not a single random holdout:
+{% endif %}
 
 {% for step in evaluation_protocol %}
 - {{ step }}
 {% endfor %}
+{% if fixed_split_available %}
+- Store the provided split file paths in experiment logs.
+- Do not create a new split unless the user explicitly approves a new data protocol.
+{% else %}
 - Store the CV scheme, fold seed, and split file paths in experiment logs.
-- Store the cleaned dataset/corpus manifest with path, schema, version/hash, and row/document count.
 - Reuse the same split/fold/query manifests for every baseline and candidate comparison.
+{% endif %}
+- Store the cleaned dataset/corpus manifest with path, schema, version/hash, and row/document count.
 
 {% if task_type in ["retrieval", "rag"] %}
 ## Retrieval Baseline Protocol

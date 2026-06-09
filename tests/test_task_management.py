@@ -90,3 +90,23 @@ def test_tasks_use_selected_baseline_model(tmp_project):
     assert "Implement baseline model (TF-IDF + LinearSVC)" in Path("tasks.md").read_text(
         encoding="utf-8"
     )
+
+
+def test_tasks_verify_provided_fixed_split(tmp_project):
+    result = runner.invoke(app, ["init", "--force"])
+    assert result.exit_code == 0
+    write_state(
+        sample_ml_state(
+            dataset_size_note=(
+                "fixed train/valid/test files: train_nor_811.xlsx, "
+                "valid_nor_811.xlsx, test_nor_811.xlsx"
+            )
+        )
+    )
+
+    result = runner.invoke(app, ["tasks", "--force"])
+
+    assert result.exit_code == 0
+    tasks_md = Path("tasks.md").read_text(encoding="utf-8")
+    assert "Verify and persist provided train / val / test split" in tasks_md
+    assert "Create train / val / test split" not in tasks_md

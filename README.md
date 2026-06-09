@@ -3,20 +3,39 @@
 [![CI](https://github.com/quanai06/octopus/actions/workflows/ci.yml/badge.svg)](https://github.com/quanai06/octopus/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/cli-octopus.svg)](https://pypi.org/project/cli-octopus/)
 
-Octopus is a Python CLI that turns an ML/DL/RAG project into a baseline-first
-workflow for Codex. It captures project requirements, renders planning files,
-builds a compact task context, tracks experiments, and keeps Codex from jumping
-straight to the main model before a real baseline exists.
+## Why Use Octopus?
 
-The intended Codex loop is:
+Serious ML/DL/RAG work fails less from lack of ideas than from messy process:
+agents skip the baseline, tune on the test set, change splits without noticing,
+forget which experiment was actually better, and burn context rereading the same
+planning files. Octopus exists to make those mistakes harder.
+
+Octopus is a Python CLI for baseline-first AI-assisted ML projects. It gives
+Codex a small project brain: structured intake, fixed task gates, compact
+context, experiment memory, and baseline profiling. It does not replace your
+training code; it keeps the agent honest while it writes and runs that code.
+
+Use Octopus when you care about:
+
+- getting a real baseline before the main model,
+- keeping train/validation/test policy explicit,
+- giving Codex only the context it needs instead of the whole repo,
+- logging runs so future tuning is based on evidence,
+- resuming work without rediscovering the project every session,
+- making one controlled improvement at a time.
+
+Do not use Octopus if you only need a quick notebook experiment and do not care
+about reproducibility, experiment memory, or agent guardrails.
+
+The normal loop is:
 
 ```text
-requirements -> plan -> baseline context -> baseline run -> ingest/profile
--> selected next direction -> one controlled improvement
+intake -> baseline spec/context -> baseline run -> ingest/profile
+-> select next direction -> one controlled improvement
 ```
 
-Octopus is not a training framework. It is the project brain and guardrail layer
-around your training/eval scripts.
+For fast baselines, use `baseline_spec.yaml` and `minimal-baseline` context. For
+longer projects, use the full planning/task/experiment loop.
 
 📚 **Full documentation:** [`docs/`](docs/README.md) — getting started, concepts,
 how-to guides (Claude Code, Codex, headless, tracker ingest, tuning loop, resume),
@@ -31,12 +50,13 @@ Project docs:
 
 ## What Octopus Gives Codex
 
-- A one-command baseline setup prompt: `octopus-baseline`.
+- A Codex skill: `@octopus-baseline`.
+- A small fast-path baseline contract: `baseline_spec.yaml`.
 - A compact working file: `.octopus/context/current_context.md`.
+- A minimal context profile for quick baseline work.
 - Baseline-first task gates in `.octopus/tasks.json`.
-- Experiment memory in `.octopus/experiments/`.
-- Baseline profiling and next-step selection.
-- Codex skill installed under `~/.codex/skills/`, plus prompt-router fallbacks.
+- Experiment memory and profiling under `.octopus/experiments/`.
+- Prompt-router fallbacks under `~/.codex/prompts/`.
 
 Official Codex references:
 
@@ -86,73 +106,37 @@ curl -fsSL https://chatgpt.com/codex/install.sh | sh
 codex
 ```
 
-Then install Octopus' Codex skill and prompt-router fallbacks once:
-
-```bash
-octopus install --runtime codex
-```
-
-This writes:
-
-```text
-~/.codex/skills/octopus-baseline/SKILL.md
-~/.codex/skills/octopus-baseline/agents/openai.yaml
-~/.codex/prompts/octopus-baseline.md
-~/.codex/prompts/octopus-plan.md
-~/.codex/prompts/octopus-train.md
-~/.codex/prompts/octopus-tune.md
-~/.codex/prompts/octopus-status.md
-~/.codex/prompts/octopus-resume.md
-~/.codex/.octopus-manifest.json
-```
-
-Uninstall:
-
-```bash
-octopus uninstall --runtime codex
-```
-
 ## Fast Start With Codex
 
-One-time machine setup:
+Install once:
 
 ```bash
-python -m pip install cli-octopus
+python -m pip install -U cli-octopus
 octopus install --runtime codex
 ```
 
-Per ML/DL/RAG project:
+Use in any ML/DL/RAG project:
 
 ```bash
 cd your-ml-project
 codex
 ```
 
-In Codex, type:
+In Codex, choose the skill:
 
 ```text
 /skills
 ```
 
-Choose **Octopus Baseline**, or invoke it directly with
-`@octopus-baseline run the baseline workflow for this project`. That skill is
-the normal path. It tells Codex to initialize Octopus if needed, collect missing
-project facts, render the plan/tasks/context, read
-`.octopus/context/current_context.md`, write the baseline plan plus script
-skeleton, and stop before training. The manual commands below are only for
-debugging or full control.
+Select **Octopus Baseline**. Or invoke it directly:
 
-Expected behavior:
+```text
+@octopus-baseline run the baseline workflow for this project
+```
 
-1. If `.octopus/` is missing, Codex runs `octopus init --runtime claude,codex`.
-2. Codex collects or writes missing project facts.
-3. Codex runs `octopus ask --from answers.yaml` when it can avoid an interactive TTY.
-4. Codex runs `octopus plan`, `octopus ml-plan`, and `octopus tasks`.
-5. Codex runs `octopus task next`.
-6. Codex runs `octopus context --task "train the baseline" --profile training`.
-7. Codex reads `.octopus/context/current_context.md`.
-8. Codex writes the baseline plan and baseline script skeleton.
-9. Codex stops before training unless you explicitly ask it to run the baseline.
+Restart Codex after `octopus install --runtime codex` if Codex was already open.
+The skill initializes Octopus when needed, builds `.octopus/context/current_context.md`,
+and prepares the first baseline plan/script before any main-model work.
 
 If your Codex surface does not load skills, open or paste the fallback prompt:
 
@@ -160,7 +144,11 @@ If your Codex surface does not load skills, open or paste the fallback prompt:
 cat ~/.codex/prompts/octopus-baseline.md
 ```
 
-Then paste that content into Codex.
+Uninstall:
+
+```bash
+octopus uninstall --runtime codex
+```
 
 ## Manual Codex Setup
 

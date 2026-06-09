@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import yaml  # type: ignore[import-untyped]
 from pydantic import ValidationError
@@ -17,6 +17,78 @@ console = Console()
 CUSTOM_CHOICE = "custom..."
 ProjectType = str
 DatasetStatus = str
+
+
+def _allowed_answer_keys() -> set[str]:
+    return set(ProjectState.model_fields)
+
+
+def _allowed_compute_keys() -> set[str]:
+    return set(ComputeConfig.model_fields)
+
+
+def _validate_answers_mapping(data: dict[str, Any]) -> None:
+    unknown = sorted(set(data) - _allowed_answer_keys())
+    if unknown:
+        console.print("[red]Answers file has unknown top-level key(s):[/red]")
+        console.print("  " + ", ".join(unknown))
+        console.print("Run `octopus ask --schema` to print the supported fields.")
+        raise SystemExit(1)
+    compute = data.get("compute")
+    if compute is not None:
+        if not isinstance(compute, dict):
+            console.print("[red]`compute` must be a mapping.[/red]")
+            raise SystemExit(1)
+        unknown_compute = sorted(set(compute) - _allowed_compute_keys())
+        if unknown_compute:
+            console.print("[red]Answers file has unknown compute key(s):[/red]")
+            console.print("  " + ", ".join(unknown_compute))
+            console.print("Run `octopus ask --schema` to print the supported fields.")
+            raise SystemExit(1)
+
+
+def _has_ml_intake_signals(data: dict[str, Any]) -> bool:
+    return any(
+        data.get(key) is not None
+        for key in (
+            "task_type",
+            "dataset_status",
+            "main_metric",
+            "baseline_model",
+            "has_labels",
+            "has_class_imbalance",
+        )
+    )
+
+
+def print_answers_schema() -> None:
+    example = {
+        "project_name": "VSMEC Emotion Classifier",
+        "project_goal": "Build a Vietnamese social-media emotion classifier.",
+        "target_users": "ML engineers",
+        "project_type": "machine learning",
+        "task_type": "text_classification",
+        "input_type": "text",
+        "output_type": "emotion_label",
+        "dataset_status": "available",
+        "dataset_size_note": (
+            "fixed train/valid/test files: train_nor_811.xlsx, "
+            "valid_nor_811.xlsx, test_nor_811.xlsx"
+        ),
+        "has_labels": True,
+        "has_class_imbalance": True,
+        "main_metric": "macro_f1",
+        "baseline_model": "TF-IDF + Logistic Regression",
+        "target_score": 0.82,
+        "runtime": ["codex"],
+        "compute": {
+            "has_gpu": False,
+            "environment": "local",
+            "budget_note": "CPU only",
+            "deadline": None,
+        },
+    }
+    console.print(yaml.safe_dump(example, sort_keys=False).rstrip())
 
 
 def _text(
@@ -138,6 +210,9 @@ def ask_from_file(source: Path) -> None:
     if not isinstance(data, dict):
         console.print("[red]Answers file must be a mapping of field: value.[/red]")
         raise SystemExit(1)
+    _validate_answers_mapping(data)
+    if "project_type" not in data and _has_ml_intake_signals(data):
+        data["project_type"] = "rag" if data.get("task_type") == "rag" else "machine learning"
 
     base = (load_state() if state_exists() else ProjectState()).model_dump(mode="json")
     compute = {**base.get("compute", {}), **(data.pop("compute", None) or {})}

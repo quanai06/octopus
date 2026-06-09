@@ -79,6 +79,18 @@ def _first_experiments(
     ]
 
 
+def _evaluation_protocol_for_state(state: ProjectState) -> list[str]:
+    if state.fixed_split_available:
+        return [
+            "Use the provided train/validation/test split files as immutable inputs.",
+            "Fit preprocessing and baseline models on train only while selecting config.",
+            "Use validation only for model/config selection and error analysis.",
+            "After the config is frozen, optionally train the final model on train+validation.",
+            "Evaluate the test set once; never tune on test.",
+        ]
+    return evaluation_protocol_for(state.task_type)
+
+
 def selected_baseline_models(state: ProjectState, rules: MlPlanRules) -> list[str]:
     if not state.baseline_model:
         return list(rules.baseline_models)
@@ -105,7 +117,8 @@ def _planner_context(state: ProjectState, rules: MlPlanRules) -> dict[str, Any]:
         "model_candidates": candidates,
         "data_checks": list(rules.data_checks),
         "training_checklist": list(rules.training_checklist),
-        "evaluation_protocol": evaluation_protocol_for(state.task_type),
+        "evaluation_protocol": _evaluation_protocol_for_state(state),
+        "fixed_split_available": state.fixed_split_available,
         "compute_budget_notes": _compute_budget_notes(state),
     }
 

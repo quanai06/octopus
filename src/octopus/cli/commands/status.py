@@ -1,5 +1,6 @@
 import json
 from builtins import print as raw_print
+from datetime import datetime
 
 from rich.console import Console
 from rich.table import Table
@@ -21,6 +22,10 @@ from octopus.tools.jsonio import dumps, success
 from octopus.tools.registry import call_tool
 
 console = Console()
+
+
+def _format_mtime(timestamp: float) -> str:
+    return datetime.fromtimestamp(timestamp).astimezone().isoformat(timespec="seconds")
 
 
 def show_status(*, json_output: bool = False) -> None:
@@ -71,7 +76,7 @@ def show_status(*, json_output: bool = False) -> None:
             (line for line in text.splitlines() if line.startswith("> Estimated tokens:")),
             "> Estimated tokens: unknown",
         )
-        console.print(f"  Last built: {CURRENT_CONTEXT.stat().st_mtime:.0f}")
+        console.print(f"  Last built: {_format_mtime(CURRENT_CONTEXT.stat().st_mtime)}")
         console.print(f"  {token_line.removeprefix('> ')}")
     else:
         console.print("  Not built yet.")

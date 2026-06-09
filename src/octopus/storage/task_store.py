@@ -20,6 +20,16 @@ def task_state_exists() -> bool:
 def default_tasks_for_state(state: ProjectState) -> list[TaskItem]:
     rules = rules_for_task(state.task_type if state.task_type != "rag" else "rag")
     baseline = selected_baseline_models(state, rules)[0]
+    split_title = (
+        "Verify and persist provided train / val / test split"
+        if state.fixed_split_available
+        else "Create train / val / test split"
+    )
+    split_description = (
+        "Use the provided fixed split files; do not reshuffle or recreate them."
+        if state.fixed_split_available
+        else "Create a reproducible split manifest before baseline training."
+    )
     tasks = [
         TaskItem(
             id="T001",
@@ -50,10 +60,11 @@ def default_tasks_for_state(state: ProjectState) -> list[TaskItem]:
         ),
         TaskItem(
             id="T005",
-            title="Create train / val / test split",
+            title=split_title,
             priority="high",
             depends_on=["T004"],
             milestone="Milestone 2: Data Pipeline",
+            description=split_description,
         ),
     ]
     if state.has_class_imbalance:
