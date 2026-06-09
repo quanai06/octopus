@@ -438,10 +438,10 @@ random split. `octopus ml-plan` renders a "Split & Cross-Validation" section in
 
 | Task | Split + CV |
 |---|---|
-| text / image classification | StratifiedKFold(k=5) + per-class recall, mean ± std; StratifiedGroupKFold if rows share a group; for deep models use ≥3 seeds when k-fold is too costly |
+| text / image classification | canonical cleaned dataset manifest; StratifiedKFold(k=5) + per-class recall, mean ± std; StratifiedGroupKFold if rows share a group; for deep models use k-fold when feasible or ≥3 fixed seeds with an explicit exception |
 | regression (tabular) | KFold(k=5); GroupKFold if rows share an entity; TimeSeriesSplit if the target is time-ordered |
 | forecasting | TimeSeriesSplit (expanding/rolling), never shuffle, lag features computed inside each fold, compared to a naive baseline |
-| retrieval / RAG | fixed labeled query eval set; Recall@k / MRR / source-hit; k-fold or fixed dev/test over queries; never tune on test queries |
+| retrieval / RAG | canonical cleaned corpus manifest; fixed labeled query eval set; documented chunking grid; fixed top-k grid; Recall@k / MRR / source-hit; rerank only later over a recorded candidate pool; never tune on test queries |
 | recommendation | time-aware split on future interactions; guard cold-start and leakage |
 | other | default: held-out test + k-fold (fold scheme chosen to match the data) |
 

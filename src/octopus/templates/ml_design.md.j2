@@ -36,6 +36,19 @@ Recommended checks:
 {% endfor %}
 {% endif %}
 
+## Baseline Contract
+
+- Use the canonical cleaned dataset/corpus as the only baseline input.
+- Record raw input path, cleaned input path, schema, version/hash, and row/document count.
+- Persist split/fold manifests before training and reuse them for every model comparison.
+- Fit preprocessing only inside train folds; never fit vectorizers/scalers/encoders on validation/test data.
+- Treat test data/test queries as final reporting only; tune on train/CV/dev only.
+{% if task_type in ["retrieval", "rag"] %}
+- Record chunk ids, source ids, offsets, chunk size, overlap, and index config.
+- Tune chunk size/overlap and top-k on dev queries only; report test once.
+- Start with BM25. Add dense retrieval, hybrid retrieval, or reranking only as later controlled changes.
+{% endif %}
+
 ## Baseline Models
 
 {% for model in baseline_models %}

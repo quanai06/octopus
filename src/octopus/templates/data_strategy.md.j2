@@ -27,6 +27,19 @@ The baseline is a full train/eval protocol, not a single random holdout:
 - {{ step }}
 {% endfor %}
 - Store the CV scheme, fold seed, and split file paths in experiment logs.
+- Store the cleaned dataset/corpus manifest with path, schema, version/hash, and row/document count.
+- Reuse the same split/fold/query manifests for every baseline and candidate comparison.
+
+{% if task_type in ["retrieval", "rag"] %}
+## Retrieval Baseline Protocol
+
+- Build BM25 first over the canonical cleaned corpus.
+- Record chunking grid candidates before tuning (for example token-aware 256/512/1024 with 10-20% overlap).
+- Choose chunk size/overlap on dev queries only, then freeze it before test reporting.
+- Evaluate a fixed top-k grid such as k=3/5/10/20 with Recall@k, MRR, and source-hit rate.
+- Keep generation out of the baseline until retrieval reaches the target Recall@k.
+- Add reranking only as a later controlled change; rerank a recorded candidate pool such as top-50 to final top-k.
+{% endif %}
 
 ## Quality Checks
 

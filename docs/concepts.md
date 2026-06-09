@@ -22,10 +22,16 @@ The baseline is a **full, data-type-aware train/eval protocol**, not a single
 random holdout. `octopus ml-plan` renders a "Split & Cross-Validation" section
 (in `data_strategy.md` and `experiment_plan.md`) chosen by task type:
 
-- classification → **StratifiedKFold** (k=5), report mean ± std + per-class recall;
+- all tasks → use the canonical cleaned dataset/corpus only, and log raw path,
+  cleaned path, schema, version/hash, and split/fold/query manifests;
+- classification / DL classification → **StratifiedKFold** (k=5) when feasible,
+  report mean ± std + per-class recall; for expensive DL, log the exception and
+  use >=3 fixed-seed stratified runs;
 - tabular regression → **KFold** (GroupKFold when rows share an entity);
 - forecasting / time-ordered → **TimeSeriesSplit** (temporal, never shuffle);
-- retrieval / RAG → **fixed labeled query eval set**, Recall@k / MRR / source-hit;
+- retrieval / RAG → **fixed labeled query eval set**, documented chunking grid,
+  fixed top-k grid, Recall@k / MRR / source-hit, and reranking only as a later
+  controlled change over a recorded candidate pool;
 - recommendation → **time-aware split** on future interactions.
 
 Preprocessing is fit inside each fold (leakage-safe), the held-out test set stays

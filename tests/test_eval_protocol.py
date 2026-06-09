@@ -38,21 +38,30 @@ def test_classification_baseline_uses_stratified_kfold(tmp_project):
     assert "## Split & Cross-Validation" in ds
     assert "StratifiedKFold" in ds
     assert "mean ± std" in ds
+    assert "canonical cleaned dataset" in ds
+    assert "split/fold" in ds
     # The protocol must reach the agent's working context, not just the doc.
     assert "StratifiedKFold" in ctx
+    assert "canonical cleaned dataset" in ctx
 
 
 def test_forecasting_baseline_uses_timeseries_split(tmp_project):
     ds, ctx = _render("forecasting", "RMSE")
     assert "TimeSeriesSplit" in ds
     assert "Never shuffle" in ds
+    assert "temporal fold boundaries" in ds
     assert "TimeSeriesSplit" in ctx
 
 
 def test_rag_baseline_uses_fixed_query_eval_set(tmp_project):
-    ds, _ = _render("rag", "Recall@k")
+    ds, ctx = _render("rag", "Recall@k")
     assert "fixed labeled query" in ds.lower()
     assert "Recall@k" in ds
+    assert "chunking grid" in ds
+    assert "k=3/5/10/20" in ds
+    assert "rerank a recorded candidate pool" in ds
+    assert "BM25" in ctx
+    assert "top-k" in ctx
 
 
 def test_experiment_plan_baseline_mentions_cross_validation(tmp_project):
@@ -60,3 +69,4 @@ def test_experiment_plan_baseline_mentions_cross_validation(tmp_project):
     plan = Path("experiment_plan.md").read_text(encoding="utf-8")
     assert "cross-validat" in plan.lower()
     assert "mean ± std" in plan
+    assert "cleaned-data manifest" in plan

@@ -29,12 +29,16 @@ RULE_MAP: dict[str, MlPlanRules] = {
             "Compare macro F1 and confusion matrix against the baseline.",
         ),
         data_checks=(
+            "Use the canonical cleaned dataset as the baseline input; log raw and cleaned "
+            "paths/hashes.",
             "Verify label taxonomy and remove ambiguous labels before training.",
-            "Use stratified train / validation / test split.",
+            "Use stratified train / validation / test split and persist the split manifest.",
             "Scan for duplicate or near-duplicate text across splits.",
             "Inspect noisy text, slang, casing, URLs, emojis, and teencode.",
         ),
         training_checklist=(
+            "Treat the cleaned dataset version and split manifest as immutable for all "
+            "comparisons.",
             "Freeze the split before model comparison.",
             "Log macro F1, per-class recall, confusion matrix, and seed.",
             "Keep preprocessing identical between baseline and transformer runs.",
@@ -52,9 +56,15 @@ RULE_MAP: dict[str, MlPlanRules] = {
             "Add augmentation only after the no-augmentation baseline.",
         ),
         data_checks=(
+            "Use the canonical cleaned image manifest as the baseline input; log file hashes.",
             "Check duplicate images across splits.",
             "Validate labels manually on a small random sample.",
-            "Use stratified split when labels are imbalanced.",
+            "Use stratified fold/split manifests when labels are imbalanced.",
+        ),
+        training_checklist=(
+            "Use no augmentation in the first transfer-learning baseline.",
+            "Use StratifiedKFold when feasible; if too costly, log >=3 fixed-seed stratified runs.",
+            "Keep image resizing/normalization fixed across baseline and candidate runs.",
         ),
     ),
     "regression": MlPlanRules(
@@ -69,9 +79,16 @@ RULE_MAP: dict[str, MlPlanRules] = {
             "Train tree baseline and compare residuals.",
         ),
         data_checks=(
+            "Use the canonical cleaned feature table as the baseline input; log schema and "
+            "data hash.",
             "Check target leakage columns.",
-            "Use a split that matches deployment time or grouping constraints.",
+            "Use KFold / GroupKFold / TimeSeriesSplit according to deployment and grouping "
+            "constraints.",
             "Review residuals by important segments.",
+        ),
+        training_checklist=(
+            "Fit encoders/imputers/scalers inside each fold on train folds only.",
+            "Persist fold ids and feature schema with the baseline artifact.",
         ),
     ),
     "retrieval": MlPlanRules(
@@ -93,10 +110,17 @@ RULE_MAP: dict[str, MlPlanRules] = {
             "Compare Recall@k and inspect failure queries.",
         ),
         data_checks=(
+            "Use the canonical cleaned corpus as the baseline input; log document ids and hashes.",
             "Validate document chunking boundaries.",
             "Check duplicate documents and stale content.",
             "Confirm query labels match the target user intent.",
             "Require answer citations that point to retrieved source chunks.",
+        ),
+        training_checklist=(
+            "Tune chunk size/overlap and top-k on dev queries only.",
+            "Use BM25 before dense retrieval; add reranking only after baseline retrieval is "
+            "logged.",
+            "When reranking, rerank a recorded candidate pool (for example top-50) to final top-k.",
         ),
     ),
     "rag": MlPlanRules(
@@ -118,10 +142,18 @@ RULE_MAP: dict[str, MlPlanRules] = {
             "Only evaluate generation after retrieval reaches the target Recall@k.",
         ),
         data_checks=(
+            "Use the canonical cleaned corpus as the baseline input; log document ids and hashes.",
             "Validate source document freshness and ownership.",
             "Check chunk size and overlap against answer boundaries.",
             "Separate retrieval metrics from generation metrics.",
             "Require source citations and faithfulness checks for generated answers.",
+        ),
+        training_checklist=(
+            "Tune chunk size/overlap and top-k on dev queries only.",
+            "Use BM25 before dense retrieval; add reranking only after baseline retrieval is "
+            "logged.",
+            "When reranking, rerank a recorded candidate pool (for example top-50) to final top-k.",
+            "Do not evaluate generation until retrieval meets the target Recall@k.",
         ),
     ),
     "recommendation": MlPlanRules(
@@ -130,6 +162,12 @@ RULE_MAP: dict[str, MlPlanRules] = {
         risks=["cold start", "sparse interactions", "incorrect time-based split"],
         first_experiment_note="Build a popularity baseline with a time-aware split.",
         problem_type="ranking_recommendation",
+        data_checks=(
+            "Use the canonical cleaned interaction table as the baseline input; log schema and "
+            "hash.",
+            "Use a time-aware split on future interactions.",
+            "Check cold-start users/items separately.",
+        ),
     ),
     "forecasting": MlPlanRules(
         baseline_models=["Naive baseline", "ARIMA", "LightGBM"],
@@ -137,6 +175,11 @@ RULE_MAP: dict[str, MlPlanRules] = {
         risks=["time leakage", "distribution shift", "outliers"],
         first_experiment_note="Compare against a naive previous-value forecast.",
         problem_type="time_series_forecasting",
+        data_checks=(
+            "Use the canonical cleaned time series as the baseline input; log frequency and hash.",
+            "Validate time index monotonicity, missing periods, and duplicate timestamps.",
+            "Use temporal fold manifests; never shuffle.",
+        ),
     ),
     "clustering": MlPlanRules(
         baseline_models=["K-Means", "DBSCAN"],
@@ -182,50 +225,75 @@ def rules_for_task(task_type: str | None) -> MlPlanRules:
 # *rigorous* baseline (correct split + cross-validation + leakage-safe
 # preprocessing + variance reporting), not a single random holdout.
 _CLASSIFICATION_PROTOCOL = (
+    "Use the canonical cleaned dataset only; record raw path, cleaned path, version/hash, "
+    "and schema before splitting.",
     "Hold out a stratified test set first; keep it untouched until final reporting.",
     "Use StratifiedKFold (k=5, fixed seed) on the train+validation pool for model selection.",
     "Report mean ± std of macro_f1 and per-class recall across folds, not a single split.",
     "Fit all preprocessing (vectorizer/scaler/encoder) inside each fold on train folds only.",
     "If samples share a group/author/source, use StratifiedGroupKFold to avoid leakage.",
-    "For deep models where k-fold is too costly, use a fixed stratified split with >=3 seeds "
-    "and still report mean ± std.",
+    "For deep models, use StratifiedKFold when feasible; if k-fold is too costly, log the "
+    "exception and run >=3 fixed-seed stratified splits with mean ± std.",
+    "Persist split/fold manifests and reuse them for every candidate model.",
 )
 _REGRESSION_PROTOCOL = (
+    "Use the canonical cleaned feature table only; record raw path, cleaned path, version/hash, "
+    "and schema before splitting.",
     "Hold out a test set; never tune on it.",
     "Use KFold (k=5, fixed seed) for model selection; GroupKFold if rows share an entity.",
     "If the target is time-ordered, use a temporal split / TimeSeriesSplit, not random KFold.",
     "Report mean ± std of RMSE/MAE across folds and inspect residuals by segment.",
     "Fit scalers/encoders inside each fold on train folds only.",
+    "Persist split/fold manifests and feature schema with the baseline artifact.",
 )
 _TIMESERIES_PROTOCOL = (
+    "Use the canonical cleaned time series only; record raw path, cleaned path, version/hash, "
+    "frequency, and known gaps before splitting.",
     "Use a temporal split: train on the past, validate/test on the most recent window. "
     "Never shuffle.",
     "Backtest with TimeSeriesSplit (expanding or rolling window, n_splits=5).",
     "Compute lag/rolling features inside each fold; never use future information.",
     "Compare against a naive previous-value / seasonal-naive baseline.",
     "Report MAE/RMSE/MAPE per fold (mean ± std) and on the final holdout horizon.",
+    "Persist temporal fold boundaries and forecast horizon with the baseline artifact.",
 )
 _RETRIEVAL_PROTOCOL = (
+    "Use the canonical cleaned corpus only; record document ids, source paths, versions/hashes, "
+    "and excluded documents before indexing.",
     "Build a fixed labeled query -> relevant-document evaluation set and freeze it.",
     "Evaluate retrieval first: Recall@k, MRR, and source-hit rate on the fixed query set.",
     "Use a fixed dev/test query split (or k-fold over queries) for stable estimates; "
     "never tune on test queries.",
-    "Chunk once with recorded size/overlap; fit nothing on the eval queries.",
+    "Run a documented chunking grid on dev only (for example token-aware 256/512/1024 tokens "
+    "with 10-20% overlap); choose one chunk config before test reporting.",
+    "Assign stable chunk ids with source document id, character/token offsets, chunk size, "
+    "and overlap in the index manifest.",
+    "Evaluate a fixed top-k grid (for example k=3/5/10/20) and report Recall@k/MRR/source-hit.",
+    "Start with BM25; dense retrieval, hybrid retrieval, and rerankers are follow-up changes "
+    "after the BM25 baseline is logged.",
+    "If reranking is selected later, rerank a recorded candidate pool (for example BM25/dense "
+    "top-50) to final top-k with a fixed cross-encoder/reranker config.",
     "Only evaluate generation after retrieval reaches the target Recall@k; require source "
     "citations (faithfulness).",
 )
 _RECOMMENDATION_PROTOCOL = (
+    "Use the canonical cleaned interaction table only; record raw path, cleaned path, "
+    "version/hash, and schema before splitting.",
     "Use a time-aware split: train on past interactions, test on future ones. No random split.",
     "Evaluate Recall@k / NDCG@k / MRR on held-out future interactions.",
     "Guard cold-start users/items and leakage of future interactions into training.",
+    "Persist user/item universe, timestamp cutoff, and candidate-generation rules.",
 )
 DEFAULT_EVAL_PROTOCOL = (
+    "Use the canonical cleaned dataset only; record raw path, cleaned path, version/hash, "
+    "and schema before splitting.",
     "Hold out a test set and keep it untouched until final reporting.",
     "Use k-fold cross-validation (k=5, fixed seed) for model selection, with the fold scheme "
     "that matches the data: StratifiedKFold for classification, KFold for tabular regression, "
     "TimeSeriesSplit for time-ordered data, GroupKFold when rows share an entity.",
     "Fit all preprocessing inside each fold on the training folds only.",
     "Report mean ± std of the main metric across folds, then confirm on the held-out test set.",
+    "Persist split/fold manifests and reuse them for every candidate model.",
 )
 
 _EVAL_PROTOCOLS: dict[str, tuple[str, ...]] = {
