@@ -33,7 +33,7 @@ def test_install_writes_claude_commands_and_hook(tmp_path):
     assert results[0].hook_added is True
 
 
-def test_install_writes_codex_prompts(tmp_path):
+def test_install_writes_codex_prompts_and_skills(tmp_path):
     install(["codex"], home=tmp_path)
     prompts = tmp_path / ".codex" / "prompts"
     assert (prompts / "octopus-baseline.md").exists()
@@ -43,6 +43,16 @@ def test_install_writes_codex_prompts(tmp_path):
     )
     # Codex prompts are plain markdown (no Claude frontmatter block).
     assert not (prompts / "octopus-plan.md").read_text(encoding="utf-8").startswith("---")
+
+    skill = tmp_path / ".codex" / "skills" / "octopus-baseline"
+    assert (skill / "SKILL.md").exists()
+    assert (skill / "agents" / "openai.yaml").exists()
+    skill_body = (skill / "SKILL.md").read_text(encoding="utf-8")
+    assert "name: octopus-baseline" in skill_body
+    assert "octopus context --task" in skill_body
+    assert "Octopus Baseline" in (skill / "agents" / "openai.yaml").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_install_is_idempotent_for_hook(tmp_path):
@@ -76,6 +86,7 @@ def test_uninstall_removes_files_and_hook(tmp_path):
     assert not (tmp_path / ".claude" / "commands" / "octopus-baseline.md").exists()
     assert not (tmp_path / ".codex" / "prompts" / "octopus-plan.md").exists()
     assert not (tmp_path / ".codex" / "prompts" / "octopus-baseline.md").exists()
+    assert not (tmp_path / ".codex" / "skills" / "octopus-baseline" / "SKILL.md").exists()
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert "PreToolUse" not in settings.get("hooks", {})
 
@@ -164,8 +175,9 @@ def test_install_cli_codex_message_uses_prompt_name(tmp_path):
     result = runner.invoke(app, ["install", "--runtime", "codex", "--home", str(tmp_path)])
     assert result.exit_code == 0
     assert (tmp_path / ".codex" / "prompts" / "octopus-status.md").exists()
+    assert (tmp_path / ".codex" / "skills" / "octopus-baseline" / "SKILL.md").exists()
     last_line = result.output.strip().splitlines()[-1]
-    assert "octopus-status" in last_line
+    assert "@octopus-baseline" in last_line
     assert "/octopus-status" not in last_line
 
 

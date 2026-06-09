@@ -31,12 +31,16 @@ def install_runtimes(runtime: str, home: Path | None, force: bool) -> None:
                 + ("added to settings.json" if result.hook_added else "already present")
             )
     if runtimes == ["codex"]:
-        console.print("\nReload Codex, then try [bold]octopus-status[/bold].")
+        console.print(
+            "\nReload Codex, then use [bold]/skills[/bold] or "
+            "[bold]@octopus-baseline[/bold]."
+        )
     elif runtimes == ["claude"]:
         console.print("\nReload Claude Code, then try [bold]/octopus-status[/bold].")
     else:
         console.print(
-            "\nReload your runtime, then try [bold]octopus-status[/bold] in Codex "
+            "\nReload your runtime, then use [bold]/skills[/bold] or "
+            "[bold]@octopus-baseline[/bold] in Codex "
             "or [bold]/octopus-status[/bold] in Claude Code."
         )
 

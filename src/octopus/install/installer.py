@@ -14,9 +14,12 @@ from pathlib import Path
 from octopus.core.files import atomic_write_text
 from octopus.install.artifacts import (
     AGENT_DEFS,
+    CODEX_SKILLS,
     COMMAND_ROUTERS,
     render_agent_def,
     render_codex_prompt,
+    render_codex_skill,
+    render_codex_skill_openai_yaml,
     render_command_router,
 )
 from octopus.install.layout import (
@@ -25,6 +28,7 @@ from octopus.install.layout import (
     claude_commands_dir,
     claude_settings_file,
     codex_prompts_dir,
+    codex_skills_dir,
     manifest_file,
     runtime_root,
 )
@@ -104,6 +108,21 @@ def _install_codex(root: Path, force: bool) -> InstallResult:
         path = prompts_dir / f"{router.name}.md"
         _write(path, render_codex_prompt(router), force)
         result.files.append(path)
+
+    if CODEX_SKILLS:
+        skills_dir = codex_skills_dir(root)
+        skills_dir.mkdir(parents=True, exist_ok=True)
+        for skill in CODEX_SKILLS:
+            skill_dir = skills_dir / skill.name
+            agents_dir = skill_dir / "agents"
+            agents_dir.mkdir(parents=True, exist_ok=True)
+            skill_path = skill_dir / "SKILL.md"
+            _write(skill_path, render_codex_skill(skill), force)
+            result.files.append(skill_path)
+            metadata_path = agents_dir / "openai.yaml"
+            _write(metadata_path, render_codex_skill_openai_yaml(skill), force)
+            result.files.append(metadata_path)
+
     _write_manifest(root, result)
     return result
 

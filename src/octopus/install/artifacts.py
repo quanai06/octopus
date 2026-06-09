@@ -19,6 +19,16 @@ class CommandRouter:
     allowed_tools: str = "Bash(octopus *), Read, Grep, Glob"
 
 
+@dataclass(frozen=True)
+class CodexSkill:
+    name: str
+    description: str
+    body: str
+    display_name: str
+    short_description: str
+    default_prompt: str
+
+
 COMMAND_ROUTERS: tuple[CommandRouter, ...] = (
     CommandRouter(
         name="octopus-plan",
@@ -112,6 +122,57 @@ COMMAND_ROUTERS: tuple[CommandRouter, ...] = (
             "`.octopus/plans/selected_direction.yaml` if present.\n"
             "4. Read `.octopus/memory/experiments.md` to avoid repeating failed directions.\n"
             "5. Continue ONLY the in-progress task/direction. Do not start new work."
+        ),
+    ),
+)
+
+
+CODEX_SKILLS: tuple[CodexSkill, ...] = (
+    CodexSkill(
+        name="octopus-baseline",
+        description=(
+            "Run the Octopus baseline-first workflow for ML/DL/RAG projects. Use when "
+            "the user asks to set up Octopus, run octopus-baseline, prepare baseline "
+            "context, create a first baseline plan or script skeleton, or work in a "
+            "project with .octopus files."
+        ),
+        display_name="Octopus Baseline",
+        short_description="Set up Octopus context and prepare the first baseline.",
+        default_prompt="Run the Octopus baseline workflow in this project.",
+        body=(
+            "# Octopus Baseline\n\n"
+            "Use Octopus as the project brain and guardrail layer. Keep the workflow "
+            "baseline-first.\n\n"
+            "## Workflow\n\n"
+            "1. Work from the user's current project directory.\n"
+            "2. Verify `octopus --help` works. If it does not, report that the Octopus "
+            "CLI is missing from `PATH` and ask the user to install or expose it before "
+            "continuing.\n"
+            "3. If `.octopus/` is missing, run `octopus init --runtime codex`.\n"
+            "4. Run `octopus status` to inspect project state.\n"
+            "5. If project facts are missing, write `answers.yaml` and run "
+            "`octopus ask --from answers.yaml`. Do not run bare `octopus ask` in a "
+            "non-interactive tool session.\n"
+            "6. Run:\n\n"
+            "```bash\n"
+            "octopus plan --force\n"
+            "octopus ml-plan --force\n"
+            "octopus tasks --force\n"
+            "octopus task next\n"
+            "octopus context --task \"train the baseline\" --profile training\n"
+            "```\n\n"
+            "7. Read only `.octopus/context/current_context.md` as the working context.\n"
+            "8. Produce the baseline plan and baseline training-script skeleton. Stop "
+            "before training unless the user explicitly asks to run it.\n\n"
+            "## Rules\n\n"
+            "- Never skip the baseline.\n"
+            "- Never tune on the test set.\n"
+            "- Never change train/validation/test splits unless Octopus explicitly "
+            "selected that direction.\n"
+            "- Do not load raw datasets into conversation context; inspect them with "
+            "scripts or commands.\n"
+            "- After a real run, ingest it with `octopus exp ingest --run-dir <run_dir> "
+            "--kind baseline` or log metrics with `octopus exp log --kind baseline ...`.\n"
         ),
     ),
 )
@@ -231,6 +292,24 @@ def render_command_router(router: CommandRouter) -> str:
 def render_codex_prompt(router: CommandRouter) -> str:
     # Codex prompt files are plain markdown; keep a description line, drop Claude-only keys.
     return f"# {router.name}\n\n> {router.description}\n\n{router.body}\n"
+
+
+def render_codex_skill(skill: CodexSkill) -> str:
+    return (
+        "---\n"
+        f"name: {skill.name}\n"
+        f"description: {skill.description}\n"
+        "---\n\n"
+        f"{skill.body}"
+    )
+
+
+def render_codex_skill_openai_yaml(skill: CodexSkill) -> str:
+    return (
+        f"display_name: {skill.display_name}\n"
+        f"short_description: {skill.short_description}\n"
+        f"default_prompt: {skill.default_prompt}\n"
+    )
 
 
 def render_agent_def(agent: AgentDef) -> str:

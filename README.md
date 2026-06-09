@@ -36,7 +36,7 @@ Project docs:
 - Baseline-first task gates in `.octopus/tasks.json`.
 - Experiment memory in `.octopus/experiments/`.
 - Baseline profiling and next-step selection.
-- Codex prompt routers installed under `~/.codex/prompts/`.
+- Codex skill installed under `~/.codex/skills/`, plus prompt-router fallbacks.
 
 Official Codex references:
 
@@ -86,7 +86,7 @@ curl -fsSL https://chatgpt.com/codex/install.sh | sh
 codex
 ```
 
-Then install Octopus' Codex prompt routers once:
+Then install Octopus' Codex skill and prompt-router fallbacks once:
 
 ```bash
 octopus install --runtime codex
@@ -95,6 +95,8 @@ octopus install --runtime codex
 This writes:
 
 ```text
+~/.codex/skills/octopus-baseline/SKILL.md
+~/.codex/skills/octopus-baseline/agents/openai.yaml
 ~/.codex/prompts/octopus-baseline.md
 ~/.codex/prompts/octopus-plan.md
 ~/.codex/prompts/octopus-train.md
@@ -129,11 +131,13 @@ codex
 In Codex, type:
 
 ```text
-octopus-baseline
+/skills
 ```
 
-That one prompt router is the normal path. It tells Codex to initialize Octopus
-if needed, collect missing project facts, render the plan/tasks/context, read
+Choose **Octopus Baseline**, or invoke it directly with
+`@octopus-baseline run the baseline workflow for this project`. That skill is
+the normal path. It tells Codex to initialize Octopus if needed, collect missing
+project facts, render the plan/tasks/context, read
 `.octopus/context/current_context.md`, write the baseline plan plus script
 skeleton, and stop before training. The manual commands below are only for
 debugging or full control.
@@ -150,7 +154,7 @@ Expected behavior:
 8. Codex writes the baseline plan and baseline script skeleton.
 9. Codex stops before training unless you explicitly ask it to run the baseline.
 
-If your Codex surface does not expand prompt files by name, open or paste:
+If your Codex surface does not load skills, open or paste the fallback prompt:
 
 ```bash
 cat ~/.codex/prompts/octopus-baseline.md

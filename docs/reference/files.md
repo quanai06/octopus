@@ -54,6 +54,7 @@ of truth; Markdown files are generated views.
 ~/.claude/agents/octopus-*.md        # 5 subagents
 ~/.claude/settings.json              # baseline-guard PreToolUse hook (merged)
 ~/.claude/.octopus-manifest.json     # install manifest
+~/.codex/skills/octopus-baseline/    # Codex skill for baseline workflow
 ~/.codex/prompts/octopus-*.md        # 6 prompt routers
 ~/.codex/.octopus-manifest.json      # install manifest
 ```

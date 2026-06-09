@@ -6,9 +6,11 @@
 octopus install --runtime codex
 ```
 
-Writes plain-markdown prompt routers (Codex has no subagents or hooks):
+Writes a Codex skill plus plain-markdown prompt-router fallbacks:
 
 ```text
+~/.codex/skills/octopus-baseline/SKILL.md
+~/.codex/skills/octopus-baseline/agents/openai.yaml
 ~/.codex/prompts/octopus-{baseline,plan,train,tune,status,resume}.md
 ~/.codex/.octopus-manifest.json
 ```
@@ -24,10 +26,16 @@ codex
 In Codex:
 
 ```text
-octopus-baseline
+/skills
 ```
 
-If your Codex surface does not expand prompt files by name, paste the content:
+Choose **Octopus Baseline**, or invoke it directly:
+
+```text
+@octopus-baseline run the baseline workflow for this project
+```
+
+If your Codex surface does not load skills, paste the prompt-router fallback:
 
 ```bash
 cat ~/.codex/prompts/octopus-baseline.md

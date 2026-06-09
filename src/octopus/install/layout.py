@@ -46,6 +46,10 @@ def codex_prompts_dir(root: Path) -> Path:
     return root / "prompts"
 
 
+def codex_skills_dir(root: Path) -> Path:
+    return root / "skills"
+
+
 def manifest_file(root: Path) -> Path:
     return root / MANIFEST_NAME
 
