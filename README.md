@@ -22,6 +22,13 @@ around your training/eval scripts.
 how-to guides (Claude Code, Codex, headless, tracker ingest, tuning loop, resume),
 and a complete CLI / configuration / files reference.
 
+Project docs:
+
+- [Architecture](ARCHITECTURE.md) — system map, lifecycle, state files, tools,
+  MCP, and extension points.
+- [Contributing](CONTRIBUTING.md) — development setup, testing, PR checklist,
+  and contribution guidelines.
+
 ## What Octopus Gives Codex
 
 - A one-command baseline setup prompt: `octopus-baseline`.

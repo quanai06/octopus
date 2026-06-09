@@ -28,6 +28,10 @@ These docs follow the [Diátaxis](https://diataxis.fr/) structure.
 
 ## Project docs (outside `docs/`)
 - `README.md` — Codex-first overview and quickstart.
+- `ARCHITECTURE.md` — system map, lifecycle, state files, tools, MCP, and
+  extension points.
+- `CONTRIBUTING.md` — development setup, testing, PR checklist, and contribution
+  guidelines.
 - `ROADMAP_GSD_FOR_ML.md` — roadmap and phase status.
 - `phase_1.md` … `phase_4.md` — implementation notes per phase.
 - `eval_token_and_compliance.md` — token + compliance eval protocol.
