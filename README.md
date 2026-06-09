@@ -1,6 +1,7 @@
 # CLI Octopus
 
 [![CI](https://github.com/quanai06/octopus/actions/workflows/ci.yml/badge.svg)](https://github.com/quanai06/octopus/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/cli-octopus.svg)](https://pypi.org/project/cli-octopus/)
 
 Octopus is a Python CLI that turns an ML/DL/RAG project into a baseline-first
 workflow for Codex. It captures project requirements, renders planning files,
@@ -38,7 +39,22 @@ Official Codex references:
 
 ## Install
 
-Install Octopus from this repository:
+Install the released package from PyPI:
+
+```bash
+python -m pip install cli-octopus
+octopus --help
+```
+
+Python 3.11+ is required.
+
+Install the latest GitHub version without waiting for a PyPI release:
+
+```bash
+python -m pip install git+https://github.com/quanai06/octopus.git
+```
+
+For local development:
 
 ```bash
 git clone https://github.com/quanai06/octopus.git
@@ -49,14 +65,12 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Verify:
+Verify the dev install:
 
 ```bash
 octopus --help
 pytest
 ```
-
-Python 3.11+ is required.
 
 Install Codex CLI if you do not already have it:
 
@@ -602,7 +616,14 @@ eval_token_and_compliance.md
 
 ```bash
 source .venv/bin/activate
-pip install -e ".[dev]"
+python -m pip install cli-octopus
+octopus --help
+```
+
+For a local checkout:
+
+```bash
+python -m pip install -e ".[dev]"
 python -m octopus.cli.main --help
 ```
 
@@ -683,12 +704,32 @@ Release flow:
 ```bash
 make check
 python -m build
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 Then create/publish the GitHub Release for that tag. The publish workflow will
 upload the package to PyPI.
+
+PyPI never allows re-uploading the same version. If the workflow fails with
+`File already exists`, that version is already published. Bump
+`pyproject.toml`:
+
+```toml
+version = "0.1.1"
+```
+
+then commit, tag, and publish a new GitHub Release.
+
+After publish, test the package from a clean environment:
+
+```bash
+python -m venv /tmp/octopus-test
+source /tmp/octopus-test/bin/activate
+python -m pip install cli-octopus
+octopus --help
+octopus tool list --json
+```
 
 ## Development
 
