@@ -744,6 +744,10 @@ octopus --help
 octopus tool list --json
 ```
 
+## License
+
+MIT. See [LICENSE](LICENSE).
+
 ## Development
 
 ```bash
