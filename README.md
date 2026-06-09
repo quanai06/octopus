@@ -79,7 +79,7 @@ curl -fsSL https://chatgpt.com/codex/install.sh | sh
 codex
 ```
 
-Then install Octopus' Codex prompt routers:
+Then install Octopus' Codex prompt routers once:
 
 ```bash
 octopus install --runtime codex
@@ -105,10 +105,17 @@ octopus uninstall --runtime codex
 
 ## Fast Start With Codex
 
-From inside your ML/DL/RAG project:
+One-time machine setup:
 
 ```bash
+python -m pip install cli-octopus
 octopus install --runtime codex
+```
+
+Per ML/DL/RAG project:
+
+```bash
+cd your-ml-project
 codex
 ```
 
@@ -117,6 +124,12 @@ In Codex, type:
 ```text
 octopus-baseline
 ```
+
+That one prompt router is the normal path. It tells Codex to initialize Octopus
+if needed, collect missing project facts, render the plan/tasks/context, read
+`.octopus/context/current_context.md`, write the baseline plan plus script
+skeleton, and stop before training. The manual commands below are only for
+debugging or full control.
 
 Expected behavior:
 
