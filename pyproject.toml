@@ -1,6 +1,6 @@
 [project]
 name = "cli-octopus"
-version = "0.1.0"
+version = "0.1.1"
 description = "A CLI project brain for ML/DL engineers: plan experiments, compress context, and prepare Claude/Codex-ready project instructions before training or coding."
 readme = "README.md"
 requires-python = ">=3.11"
