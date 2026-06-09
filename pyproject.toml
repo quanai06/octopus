@@ -1,6 +1,6 @@
 [project]
 name = "cli-octopus"
-version = "0.1.1"
+version = "0.1.2"
 description = "Baseline-first AI agent workflow layer for ML/DL/RAG projects: context, memory, guardrails, function tools, and MCP for Codex/Claude Code."
 readme = "README.md"
 requires-python = ">=3.11"
