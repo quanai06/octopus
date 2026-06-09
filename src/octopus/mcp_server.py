@@ -6,6 +6,7 @@ from typing import Any, TextIO
 
 from pydantic import ValidationError
 
+from octopus import __version__
 from octopus.tools.jsonio import to_jsonable
 from octopus.tools.registry import call_tool, list_tool_specs
 from octopus.tools.resources import list_resources, read_resource
@@ -81,7 +82,7 @@ def _dispatch(method: str, params: dict[str, Any]) -> dict[str, Any] | None:
                 "tools": {"listChanged": False},
                 "resources": {"listChanged": False},
             },
-            "serverInfo": {"name": "octopus", "version": "0.1.0"},
+            "serverInfo": {"name": "octopus", "version": __version__},
         }
     if method == "ping":
         return {}

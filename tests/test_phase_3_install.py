@@ -157,6 +157,16 @@ def test_install_cli_command(tmp_path):
     result = runner.invoke(app, ["install", "--runtime", "claude", "--home", str(tmp_path)])
     assert result.exit_code == 0
     assert (tmp_path / ".claude" / "commands" / "octopus-status.md").exists()
+    assert "/octopus-status" in result.output
+
+
+def test_install_cli_codex_message_uses_prompt_name(tmp_path):
+    result = runner.invoke(app, ["install", "--runtime", "codex", "--home", str(tmp_path)])
+    assert result.exit_code == 0
+    assert (tmp_path / ".codex" / "prompts" / "octopus-status.md").exists()
+    last_line = result.output.strip().splitlines()[-1]
+    assert "octopus-status" in last_line
+    assert "/octopus-status" not in last_line
 
 
 def test_install_cli_rejects_unknown_runtime(tmp_path):

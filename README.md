@@ -725,11 +725,11 @@ Then create/publish the GitHub Release for that tag. The publish workflow will
 upload the package to PyPI.
 
 PyPI never allows re-uploading the same version. If the workflow fails with
-`File already exists`, that version is already published. Bump
-`pyproject.toml`:
+`File already exists`, that version is already published. Bump `pyproject.toml`
+to the next unused version:
 
 ```toml
-version = "0.1.1"
+version = "0.1.2"
 ```
 
 then commit, tag, and publish a new GitHub Release.
