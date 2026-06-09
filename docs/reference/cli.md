@@ -37,7 +37,11 @@ Regenerate `CLAUDE.md` / `AGENTS.md` from current state.
 | `--runtime TEXT` | both | Limit to `claude` or `codex`. |
 
 ### `octopus status`
-Print a project snapshot. No options.
+Print a project snapshot.
+
+| Option | Default | Description |
+|---|---|---|
+| `--json` | off | Print a stable machine-readable result envelope. |
 
 ## Context
 
@@ -53,6 +57,7 @@ context instead of rebuilding.
 | `--full` | off | Include all planning sections. |
 | `--direction TEXT` | — | Build a direction-specific context (e.g. `D1`). |
 | `--target TEXT` | `codex` | Direction context target: `codex` or `claude`. |
+| `--json` | off | Print a stable machine-readable result envelope. |
 
 ## Tasks — `octopus task`
 
@@ -65,6 +70,8 @@ context instead of rebuilding.
 | `reopen <id>` | Reopen a done task. |
 
 `task start T020` (main model) is blocked until `T012` (baseline logged) is done.
+`task next --json` returns the same next-task result as structured tool
+`octopus_task_next`.
 
 ## Experiments — `octopus exp`
 
@@ -87,6 +94,50 @@ context instead of rebuilding.
 `ingest` also accepts `ablation` \| `debug`. `--tracker`: `auto` \| `mlflow` \|
 `wandb` \| `tensorboard` \| `none`. Logging a main/candidate before a completed
 baseline is blocked.
+
+`exp ingest --json` and `exp profile --json` return stable JSON envelopes. A
+completed baseline ingest also marks `T010`/`T011`/`T012` done, matching
+`exp log --kind baseline`.
+
+## Structured tools and MCP
+
+### `octopus tool list`
+List function-calling compatible tool contracts.
+
+| Option | Default | Description |
+|---|---|---|
+| `--json` | off | Print tool names plus input/output JSON schemas. |
+
+### `octopus tool call <name>`
+Call a structured tool with JSON arguments.
+
+| Option | Default | Description |
+|---|---|---|
+| `--input PATH` | — | JSON object file containing tool arguments. |
+| `--input-json TEXT` | — | Inline JSON object containing tool arguments. |
+| `--json` | on | Print a result envelope: `ok`, `tool`, `result` or `error`. |
+
+Available tools:
+
+| Tool | Purpose |
+|---|---|
+| `octopus_status` | Project snapshot, generated files, context metadata, next task. |
+| `octopus_task_next` | Next unblocked task and start command. |
+| `octopus_build_context` | Build task or direction context under a token budget. |
+| `octopus_ingest_run` | Ingest a run into experiment memory. |
+| `octopus_profile_baseline` | Profile the completed baseline and rank next techniques. |
+
+### `octopus mcp`
+Run the Octopus MCP server over stdio. It exposes the same tools and these
+readable resources:
+
+| Resource | Meaning |
+|---|---|
+| `octopus://context/current` | Latest `current_context.md`. |
+| `octopus://memory/experiments` | Long-term experiment memory. |
+| `octopus://session/current` | Active session summary. |
+| `octopus://reports/baseline_profile` | Latest baseline profile. |
+| `octopus://plans/next_steps` | Ranked next experiment directions. |
 
 ## Sessions — `octopus session`
 

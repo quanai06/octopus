@@ -7,7 +7,7 @@ same for DL and RAG.
 ## 1. Install
 
 ```bash
-git clone <this-repo-url>
+git clone https://github.com/quanai06/octopus.git
 cd octopus
 python -m venv .venv
 source .venv/bin/activate

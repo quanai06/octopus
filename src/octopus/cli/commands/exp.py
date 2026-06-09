@@ -1,3 +1,4 @@
+from builtins import print as raw_print
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal, cast
@@ -16,12 +17,7 @@ from octopus.core.workflow import (
     requires_baseline_gate,
 )
 from octopus.experiments.analyze import analyze_experiment
-from octopus.experiments.baseline_profile import (
-    NoBaselineError,
-    profile_baseline,
-    write_baseline_profile_md,
-)
-from octopus.experiments.ingest import ingest_run_dir
+from octopus.experiments.baseline_profile import NoBaselineError
 from octopus.experiments.next_planner import (
     generate_next_directions,
     write_next_steps_markdown,
@@ -45,7 +41,14 @@ from octopus.storage.experiment_store import (
 )
 from octopus.storage.session_store import record_if_active
 from octopus.storage.state_store import load_state, state_exists
-from octopus.storage.task_store import ensure_tasks, mark_baseline_tasks_done, render_tasks_markdown
+from octopus.storage.task_store import (
+    ensure_tasks,
+    mark_baseline_tasks_done,
+    render_tasks_markdown,
+)
+from octopus.tools.contracts import IngestRunInput, ProfileBaselineInput
+from octopus.tools.jsonio import dumps, failure, success
+from octopus.tools.runtime import ingest_run_tool, profile_baseline_tool
 
 app = typer.Typer(help="Log and inspect machine learning experiments.")
 console = Console()
@@ -333,32 +336,52 @@ def ingest_experiment(
             help="Tracker auto-detection: auto, mlflow, wandb, tensorboard, or none.",
         ),
     ] = "auto",
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print stable machine-readable JSON."),
+    ] = False,
 ) -> None:
     require_init()
     if run_dir is None and metrics is None and report is None:
+        if json_output:
+            exc = ValueError("Provide --run-dir, --metrics, or --report.")
+            raw_print(dumps(failure("octopus_ingest_run", exc)), end="")
+            raise typer.Exit(1) from exc
         console.print("[red]Provide --run-dir, --metrics, or --report.[/red]")
         raise typer.Exit(1)
     if tracker not in {"auto", "mlflow", "wandb", "tensorboard", "none"}:
+        if json_output:
+            exc = ValueError("Invalid tracker. Use: auto, mlflow, wandb, tensorboard, or none.")
+            raw_print(dumps(failure("octopus_ingest_run", exc)), end="")
+            raise typer.Exit(1) from exc
         console.print("[red]Invalid tracker.[/red]")
         console.print("Use: auto, mlflow, wandb, tensorboard, or none.")
         raise typer.Exit(1)
+    payload = IngestRunInput(
+        run_dir=run_dir,
+        metrics_path=metrics,
+        report_path=report,
+        config_path=config,
+        name=name,
+        kind=kind,
+        model=model,
+        dataset=dataset,
+        notes=note or [],
+        tags=tag or [],
+        tracker=tracker,  # type: ignore[arg-type]
+    )
     try:
-        record = ingest_run_dir(
-            run_dir or Path("."),
-            metrics_path=metrics,
-            report_path=report,
-            config_path=config,
-            name=name,
-            kind=kind,
-            model=model,
-            dataset=dataset,
-            notes=note or [],
-            tags=tag or [],
-            tracker=tracker,
-        )
+        output = ingest_run_tool(payload)
     except (FileExistsError, FileNotFoundError, ValueError, TrackerImportError) as exc:
+        if json_output:
+            raw_print(dumps(failure("octopus_ingest_run", exc)), end="")
+            raise typer.Exit(1) from exc
         console.print(f"[red]Experiment ingest failed: {exc}[/red]")
         raise typer.Exit(1) from exc
+    record = output.record
+    if json_output:
+        raw_print(dumps(success("octopus_ingest_run", output)), end="")
+        return
 
     main_metric = _default_metric([record])
     record_if_active("run", f"Ingested {record.id} ({record.kind})", last_run=record.id)
@@ -408,20 +431,37 @@ def profile_baseline_experiment(
         int,
         typer.Option("--top-k", help="Number of recommended techniques to include."),
     ] = 5,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print stable machine-readable JSON."),
+    ] = False,
 ) -> None:
     require_init()
     try:
-        profile = profile_baseline(exp_id, top_k=top_k)
+        output_model = profile_baseline_tool(
+            ProfileBaselineInput(experiment_id=exp_id, top_k=top_k, write_report=True)
+        )
     except NoBaselineError as exc:
+        if json_output:
+            raw_print(dumps(failure("octopus_profile_baseline", exc)), end="")
+            raise typer.Exit(1) from exc
         console.print(f"[red]{exc}[/red]")
         console.print("Log a baseline first:")
         console.print("  octopus exp log --kind baseline --name baseline --metric <metric>=<value>")
         raise typer.Exit(1) from exc
     except FileNotFoundError as exc:
+        if json_output:
+            raw_print(dumps(failure("octopus_profile_baseline", exc)), end="")
+            raise typer.Exit(1) from exc
         console.print(f"[red]Experiment not found: {exc.filename}[/red]")
         raise typer.Exit(1) from exc
 
-    output = write_baseline_profile_md(profile)
+    profile = output_model.profile
+    if json_output:
+        raw_print(dumps(success("octopus_profile_baseline", output_model)), end="")
+        return
+
+    output = Path(output_model.output_path or "")
     console.print(f"[green]Baseline profile generated for {profile.experiment_id}.[/green]\n")
     console.print(f"  Domain:    {profile.domain}")
     console.print(f"  Standing:  {profile.standing}")

@@ -41,7 +41,7 @@ Official Codex references:
 Install Octopus from this repository:
 
 ```bash
-git clone <this-repo-url>
+git clone https://github.com/quanai06/octopus.git
 cd octopus
 
 python -m venv .venv
@@ -346,6 +346,29 @@ octopus exp choose D1
 octopus exp compare --metric macro_f1
 octopus exp report
 ```
+
+Structured tools and MCP:
+
+```bash
+octopus status --json
+octopus task next --json
+octopus context --task "train the baseline" --profile training --json
+octopus exp ingest --run-dir <run_dir> --kind baseline --json
+octopus exp profile --json
+
+octopus tool list --json
+octopus tool call octopus_status
+octopus tool call octopus_build_context --input-json '{"task":"train baseline"}'
+
+octopus mcp   # MCP stdio server
+```
+
+The structured tools expose JSON schemas for function-calling style agents:
+`octopus_status`, `octopus_task_next`, `octopus_build_context`,
+`octopus_ingest_run`, and `octopus_profile_baseline`. The MCP server exposes the
+same tools plus resources such as `octopus://context/current`,
+`octopus://memory/experiments`, `octopus://session/current`, and
+`octopus://reports/baseline_profile`.
 
 Runtime install:
 

@@ -16,11 +16,14 @@ from octopus.cli.commands.status import show_status
 from octopus.cli.commands.sync import sync_runtime
 from octopus.cli.commands.task import app as task_app
 from octopus.cli.commands.tasks import generate_tasks
+from octopus.cli.commands.tool import app as tool_app
+from octopus.mcp_server import serve_stdio
 
 app = typer.Typer(help="Octopus CLI project brain for machine learning/deep learning planning.")
 app.add_typer(exp_app, name="exp")
 app.add_typer(task_app, name="task")
 app.add_typer(session_app, name="session")
+app.add_typer(tool_app, name="tool")
 
 
 @app.command("init")
@@ -91,6 +94,10 @@ def context_cmd(
         str,
         typer.Option("--target", help="Agent target for direction context: codex or claude."),
     ] = "codex",
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print stable machine-readable JSON."),
+    ] = False,
 ) -> None:
     build_current_context(
         task=task,
@@ -100,6 +107,7 @@ def context_cmd(
         full=full,
         direction=direction,
         target=target,
+        json_output=json_output,
     )
 
 
@@ -114,8 +122,13 @@ def sync_cmd(
 
 
 @app.command("status")
-def status_cmd() -> None:
-    show_status()
+def status_cmd(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print stable machine-readable JSON."),
+    ] = False,
+) -> None:
+    show_status(json_output=json_output)
 
 
 @app.command("resume")
@@ -135,6 +148,12 @@ def install_cmd(
     force: Annotated[bool, typer.Option("--force", help="Overwrite managed files.")] = False,
 ) -> None:
     install_runtimes(runtime=runtime, home=home, force=force)
+
+
+@app.command("mcp")
+def mcp_cmd() -> None:
+    """Run the Octopus MCP server over stdio."""
+    serve_stdio()
 
 
 @app.command("uninstall")

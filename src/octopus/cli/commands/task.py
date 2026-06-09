@@ -1,3 +1,4 @@
+from builtins import print as raw_print
 from typing import Annotated
 
 import typer
@@ -19,6 +20,8 @@ from octopus.storage.task_store import (
     save_tasks,
     set_task_status,
 )
+from octopus.tools.jsonio import dumps, success
+from octopus.tools.registry import call_tool
 
 app = typer.Typer(help="Manage Octopus task state.")
 console = Console()
@@ -62,7 +65,16 @@ def list_tasks(
 
 
 @app.command("next")
-def next_task() -> None:
+def next_task(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print stable machine-readable JSON."),
+    ] = False,
+) -> None:
+    if json_output:
+        raw_print(dumps(success("octopus_task_next", call_tool("octopus_task_next"))), end="")
+        return
+
     _, tasks = _load_managed_tasks()
     task = next_unblocked_task(tasks)
     if task is None:

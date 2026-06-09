@@ -1,4 +1,5 @@
 import json
+from builtins import print as raw_print
 
 from rich.console import Console
 from rich.table import Table
@@ -16,11 +17,17 @@ from octopus.core.paths import (
 )
 from octopus.storage.state_store import load_state
 from octopus.storage.task_store import ensure_tasks, next_unblocked_task
+from octopus.tools.jsonio import dumps, success
+from octopus.tools.registry import call_tool
 
 console = Console()
 
 
-def show_status() -> None:
+def show_status(*, json_output: bool = False) -> None:
+    if json_output:
+        raw_print(dumps(success("octopus_status", call_tool("octopus_status"))), end="")
+        return
+
     console.print("[bold]Octopus - Project Status[/bold]\n")
     if not OCTOPUS_DIR.exists():
         console.print("Octopus is not initialized.")

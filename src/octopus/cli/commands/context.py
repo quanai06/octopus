@@ -1,3 +1,5 @@
+from builtins import print as raw_print
+
 from rich.console import Console
 
 from octopus.context.builder import build_context, build_direction_context
@@ -5,6 +7,9 @@ from octopus.context.profiles import normalize_profile
 from octopus.context.token_estimator import format_token_display
 from octopus.core.guards import require_plan_files, require_state
 from octopus.storage.state_store import load_state
+from octopus.tools.contracts import BuildContextInput
+from octopus.tools.jsonio import dumps, success
+from octopus.tools.registry import call_tool
 
 console = Console()
 
@@ -18,9 +23,28 @@ def build_current_context(
     full: bool = False,
     direction: str | None = None,
     target: str = "codex",
+    json_output: bool = False,
 ) -> None:
     require_state()
     inspect = inspect_arg == "inspect"
+    if json_output:
+        payload = BuildContextInput(
+            task=task,
+            profile=profile,  # type: ignore[arg-type]
+            budget=budget,
+            full=full,
+            direction=direction,
+            target=target,  # type: ignore[arg-type]
+            write=not inspect,
+            include_content=inspect,
+        )
+        result = call_tool("octopus_build_context", payload.model_dump(mode="json"))
+        raw_print(
+            dumps(success("octopus_build_context", result)),
+            end="",
+        )
+        return
+
     if inspect_arg and not inspect:
         console.print("[red]Unknown context action.[/red]")
         console.print("Use: octopus context inspect")
